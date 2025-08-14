@@ -1,0 +1,22 @@
+{
+  "name": "Flower_server",
+  "type": "module",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/knex": "^0.15.2",
+    "@types/node": "^24.2.1",
+    "knex": "^3.1.0",
+    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.20.4",
+    "typescript": "^5.9.2"
+  },
+  "scripts": {
+    "start": "tsc && node dist/index.js",
+    "dev": "tsx watch src/index.ts"
+  }
+}
