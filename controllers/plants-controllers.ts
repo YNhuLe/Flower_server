@@ -41,10 +41,9 @@ interface Plant {
 
 const getAllPlants = async (req: Request, res: Response): Promise<void> => {
   try {
-    const data: Plant[] = await knex<Plant>("plants");
+    const data: Plant[] = await knex<Plant>("plants").select("*");
     res.status(200).json(data);
   } catch (error: any) {
-    res.status(400).send(`Error retrieving plants: ${error}`);
     res.status(400).send(`Error retrieving plants: ${error.message || error}`);
   }
 };
