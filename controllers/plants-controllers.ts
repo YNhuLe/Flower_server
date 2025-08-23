@@ -1,6 +1,6 @@
 import initKnex from "knex";
 import configuration from "../knexfile";
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 
 const knex = initKnex(configuration);
 interface Plant {
@@ -39,6 +39,7 @@ interface Plant {
   updated_at: Date;
 }
 
+//get all plants
 const getAllPlants = async (req: Request, res: Response): Promise<void> => {
   try {
     const data: Plant[] = await knex<Plant>("plants").select("*");
@@ -48,4 +49,20 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export { getAllPlants };
+
+//get plants base on categories
+const getSinglePlant = async (req: Request, res: Response): Promise<void> =>{
+  try{
+    const {id} = req.params;
+const plant: Plant | undefined = await knex<Plant>("plants").where({id: Number(id)}).first();
+
+if( !plant){
+  res.status(404).send("Plant not found.");
+  return;
+}
+res.status(200).json(plant);
+  }catch(error: any){
+    res.status(400).send(`Error retrieving plants: ${error.message || error}`);
+  }
+}
+export { getAllPlants, getSinglePlant};
