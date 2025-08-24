@@ -6,4 +6,5 @@ const router = express.Router();
 router.route("/allplants").get(plantsControllers.getAllPlants);
 //return single plant base on id
 router.route("/allplants/:id").get(plantsControllers.getSinglePlant)
+router.route("/category/:id").get(plantsControllers.getPlantList)
 export default router;
