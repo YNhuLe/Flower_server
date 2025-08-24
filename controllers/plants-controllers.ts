@@ -1,43 +1,9 @@
 import initKnex from "knex";
 import configuration from "../knexfile";
 import type { Request, Response } from "express";
-
+import type { Plant } from "../models/plants";
+import type { Category } from "../models/category";
 const knex = initKnex(configuration);
-interface Plant {
-  id: number;
-  common_name: string;
-  description: string | null;
-  image_url: string | null;
-
-  light_requirements: string | null;
-  watering_requirements: string | null;
-  humidity_preference: string | null;
-  temperature_range: string | null;
-  soil_type: string | null;
-  fertilizer_info: string | null;
-  potting_tips: string | null;
-  common_problems: string | null;
-
-  growth_habit: string | null;
-  mature_height: string | null;
-  mature_width: string | null;
-  bloom_info: string | null;
-
-  is_pet_friendly: boolean | null;
-  air_purifying: boolean | null;
-
-  original_price: number | null;
-  discounted_price: number | null;
-  size_available: string | null;
-  stock_quantity: number | null;
-  shipping_info: string | null;
-
-  rating: number;
-  num_reviews: number;
-
-  created_at: Date;
-  updated_at: Date;
-}
 
 //get all plants
 const getAllPlants = async (req: Request, res: Response): Promise<void> => {
@@ -50,7 +16,7 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
 };
 
 
-//get plants base on categories
+//get plants base on id
 const getSinglePlant = async (req: Request, res: Response): Promise<void> =>{
   try{
     const {id} = req.params;
@@ -63,6 +29,16 @@ if( !plant){
 res.status(200).json(plant);
   }catch(error: any){
     res.status(400).send(`Error retrieving plants: ${error.message || error}`);
+  }
+}
+
+//get list of plants base on category
+const getListPlant = async( req:Request, res: Response) : Promise<void> =>{
+  try{
+    const {id}= req.params;
+const plantList : [Plant] | undefined = await knex<Plant>("plants").where({id :Number(id)}).first;    
+  }catch(error: any){
+res.status(400).send(`Error retrieving plants base on category: ${error.message || error}`)
   }
 }
 export { getAllPlants, getSinglePlant};
