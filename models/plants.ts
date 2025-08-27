@@ -34,4 +34,4 @@ interface Plant {
   updated_at: Date;
   category_id: number;
 }
-export default Plant;
+export type { Plant };
