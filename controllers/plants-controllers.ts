@@ -52,4 +52,22 @@ const getPlantList = async (req: Request, res: Response): Promise<void> => {
 res.status(400).send(`Error fetching plants base on category ${error.message || error}`)
   }
 };
-export { getAllPlants, getSinglePlant , getPlantList};
+
+//giftbox base on id
+const getGiftBox = async ( req: Request, res: Response): Promise<void> =>{
+  try{
+const { boxId} = req.params;
+const giftbox = await knex("giftboxes")
+.join("giftbox_items", "giftbox_items.giftbox_id", "giftboxes.id")
+.select ("giftbox_items.*", "giftboxes.*")
+.where("giftbox_id", Number(boxId));
+ if(!giftbox || giftbox.length === 0){
+  res.status(404).send(`no giftbox found with the given ID!`);
+  return;
+ }
+ res.status(200).json(giftbox);
+  }catch(err:any){
+    res.status(200).send(`Error fetching giftbox base on id ${err.message || err}`)
+  }
+}
+export { getAllPlants, getSinglePlant , getPlantList, getGiftBox};
