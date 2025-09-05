@@ -46,28 +46,63 @@ const getPlantList = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     res.status(200).json(plantList);
-
   } catch (error: any) {
-
-res.status(400).send(`Error fetching plants base on category ${error.message || error}`)
+    res
+      .status(400)
+      .send(`Error fetching plants base on category ${error.message || error}`);
   }
 };
 
-//giftbox base on id
-const getGiftBox = async ( req: Request, res: Response): Promise<void> =>{
-  try{
-const { boxId} = req.params;
-const giftbox = await knex("giftboxes")
-.join("giftbox_items", "giftbox_items.giftbox_id", "giftboxes.id")
-.select ("giftbox_items.*", "giftboxes.*")
-.where("giftbox_id", Number(boxId));
- if(!giftbox || giftbox.length === 0){
-  res.status(404).send(`no giftbox found with the given ID!`);
-  return;
- }
- res.status(200).json(giftbox);
-  }catch(err:any){
-    res.status(200).send(`Error fetching giftbox base on id ${err.message || err}`)
+//get giftbox base on the Id
+
+const getGiftBox = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { boxId } = req.params;
+
+    const result = await knex.raw(
+      `
+      SELECT 
+        g.id AS giftbox_id,
+        g.title,
+        g.subtitle,
+        g.img_url,
+        g.discount,
+        g.price,
+        g.ori_price,
+        g.is_featured,
+        g.created_at,
+        g.updated_at,
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'item_name', i.item_name,
+            'quantity', i.quantity,
+            'sort_order', i.sort_order
+          ) ORDER BY i.sort_order
+        ) AS item_names
+      FROM giftboxes g
+      JOIN giftbox_items i ON g.id = i.giftbox_id
+      WHERE g.id = ?
+      GROUP BY 
+        g.id, g.title, g.subtitle, g.img_url, g.discount, g.price, 
+        g.ori_price, g.is_featured, g.created_at, g.updated_at;
+      `,
+      [boxId]
+    );
+console.log( "Result: ", result)
+    const giftbox = result?.rows?.[0];
+
+    if (!giftbox) {
+      res.status(404).send(`No giftbox found!`);
+      return;
+    }
+
+    giftbox.items = giftbox.item_names;
+    delete giftbox.item_names;
+
+    res.status(200).json(giftbox);
+  } catch (err: any) {
+    res.status(500).send(`Error fetching giftbox by ID: ${err.message || err}`);
   }
-}
-export { getAllPlants, getSinglePlant , getPlantList, getGiftBox};
+};
+
+export { getAllPlants, getSinglePlant, getPlantList, getGiftBox };
