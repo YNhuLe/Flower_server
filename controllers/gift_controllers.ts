@@ -9,7 +9,10 @@ const knex = initKnex(configuration);
 //get all the gifts
 const getAllGifts = async( req: Request, res: Response): Promise<void> =>{
     try{
-        const data: Gift[] = await knex<Gift>("gift_items").select("*");
+        const data: Gift[] = await knex<Gift>("gift_items")
+        .join("gift_categories","gift_items.category_id", "gift_categories.id" )
+        .select("gift_items.*", "gift_categories.*")
+        ;
          res.status(200).json(data);
          console.log(data);
     }catch(error: any){
