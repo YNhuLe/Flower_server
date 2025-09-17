@@ -9,4 +9,10 @@ isNewArrival?: boolean;
 isPopular?: boolean;
 isOnSale?: boolean;
 }
-export type {Gift};
+
+interface Gift_Categories{
+    is: number;
+    name: string;
+
+}
+export type {Gift, Gift_Categories};
