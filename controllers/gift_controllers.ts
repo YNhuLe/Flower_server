@@ -25,7 +25,7 @@ const getAllCategories = async ( req: Request, res:Response) : Promise<void> =>{
 
     try{
 const giftCategories: Gift_Categories[] = await knex<Gift_Categories>("gift_categories")
-.select("name");
+.select("category_name");
 res.status(200).json(giftCategories);
 console.log("Gift categories" , giftCategories);
     }catch(error: any){
