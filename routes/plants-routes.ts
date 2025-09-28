@@ -6,7 +6,7 @@ const router = express.Router();
 router.route("/allplants").get(plantsControllers.getAllPlants);
 //return single plant base on id
 router.route("/allplants/:id").get(plantsControllers.getSinglePlant)
-router.route("/category").get(categoryControllers.getAllcategories);
+router.route("/category").get(categoryControllers.getAllCategories);
 router.route("/category/:id").get(plantsControllers.getPlantList)
 router.route("/giftbox/:boxId").get(plantsControllers.getGiftBoxById)
 router.route("/products").get(plantsControllers.getGiftBox)
