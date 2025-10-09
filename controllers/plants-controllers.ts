@@ -2,7 +2,6 @@ import initKnex from "knex";
 import configuration from "../knexfile";
 import type { Request, Response } from "express";
 import type { Plant } from "../models/plants";
-import type { Category } from "../models/category";
 const knex = initKnex(configuration);
 
 //get all plants
@@ -33,6 +32,23 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+//get plant info and their category
+const getPlantCate = async (req: Request, res:Response) :Promise<void> =>{
+  try{
+const plantCategory = await knex("plants")
+.join("categories", "categories.id", "plants.category_id")
+.select("plants.*", "categories.*");
+if( !plantCategory || plantCategory.length === 0){
+  res.status(404).send(`No plant found!`);
+  return
+}
+res.status(200).json(plantCategory);
+  }catch(error:any){
+    res.status(400).send(`Error retrieving plant and their category!`);
+  
+  }
+}
+
 //get list of plants base on category
 const getPlantList = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -52,6 +68,8 @@ const getPlantList = async (req: Request, res: Response): Promise<void> => {
       .send(`Error fetching plants base on category ${error.message || error}`);
   }
 };
+
+
 //get all the giftboxes
 const getGiftBox = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -157,4 +175,5 @@ export {
   getPlantList,
   getGiftBox,
   getGiftBoxById,
+  getPlantCate
 };
