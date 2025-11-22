@@ -8,7 +8,12 @@ const knex = initKnex(configuration);
 const getAllPlants = async (req: Request, res: Response): Promise<void> => {
   try {
     const data: Plant[] = await knex<Plant>("plants").select("*");
-    res.status(200).json(data);
+    const normalised = data.map((plant) => ({
+      ...plant,
+      original_price: Number(plant.original_price),
+      discounted_price: Number(plant.discounted_price),
+    }));
+    res.status(200).json(normalised);
   } catch (error: any) {
     res.status(400).send(`Error retrieving plants: ${error.message || error}`);
   }
@@ -26,28 +31,39 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
       res.status(404).send("Plant not found.");
       return;
     }
-    res.status(200).json(plant);
+    const normalised = {
+      ...plant,
+      original_price: Number(plant.original_price),
+      discounted_price: Number(plant.discounted_price),
+    };
+    res.status(200).json(normalised);
   } catch (error: any) {
     res.status(400).send(`Error retrieving plants: ${error.message || error}`);
   }
 };
 
 //get plant info and their category
-const getPlantCate = async (req: Request, res:Response) :Promise<void> =>{
-  try{
-const plantCategory = await knex("plants")
-.join("categories", "categories.id", "plants.category_id")
-.select("plants.*", "categories.*");
-if( !plantCategory || plantCategory.length === 0){
-  res.status(404).send(`No plant found!`);
-  return
-}
-res.status(200).json(plantCategory);
-  }catch(error:any){
+const getPlantCate = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const plantCategory = await knex("plants")
+      .join("categories", "categories.id", "plants.category_id")
+      .select("plants.*", "categories.*");
+    if (!plantCategory || plantCategory.length === 0) {
+      res.status(404).send(`No plant found!`);
+      return;
+    }
+
+    const normalised = plantCategory.map((plant) => ({
+      ...plant,
+      original_price: Number(plant.original_price),
+
+      discounted_price: Number(plant.discounted_price),
+    }));
+    res.status(200).json(normalised);
+  } catch (error: any) {
     res.status(400).send(`Error retrieving plant and their category!`);
-  
   }
-}
+};
 
 //get list of plants base on category
 const getPlantList = async (req: Request, res: Response): Promise<void> => {
@@ -61,14 +77,19 @@ const getPlantList = async (req: Request, res: Response): Promise<void> => {
       res.status(404).send("No plants found with the given category!");
       return;
     }
-    res.status(200).json(plantList);
+
+    const normalised = plantList.map((plant) => ({
+      ...plant,
+      original_price: Number(plant.original_price),
+      discounted_price: Number(plant.discounted_price),
+    }));
+    res.status(200).json(normalised);
   } catch (error: any) {
     res
       .status(400)
       .send(`Error fetching plants base on category ${error.message || error}`);
   }
 };
-
 
 //get all the giftboxes
 const getGiftBox = async (req: Request, res: Response): Promise<void> => {
@@ -175,5 +196,5 @@ export {
   getPlantList,
   getGiftBox,
   getGiftBoxById,
-  getPlantCate
+  getPlantCate,
 };
