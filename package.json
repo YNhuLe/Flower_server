@@ -19,7 +19,7 @@
     "typescript": "^5.9.2"
   },
   "scripts": {
-    "start": "tsc && node dist/index.js",
+      "start": "ts-node src/index.ts",
     "dev": "tsx watch src/index.ts"
   }
 }

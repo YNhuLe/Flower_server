@@ -21,8 +21,7 @@ interface Plant {
   is_pet_friendly: boolean | null;
   air_purifying: boolean | null;
 
-  original_price: number | null;
-  discounted_price: number | null;
+
   size_available: string | null;
   stock_quantity: number | null;
   shipping_info: string | null;
@@ -34,4 +33,18 @@ interface Plant {
   updated_at: Date;
   category_id: number;
 }
-export type { Plant };
+
+ interface PlantSize {
+  size_id: number;
+  plant_id: number;
+  size: string | null;
+  original_price: number;
+  discount_percentage: number;
+  discounted_price?: number;
+}
+
+interface PlantWithSizes extends Plant {
+  sizes: PlantSize[];
+}
+
+export type { Plant , PlantSize, PlantWithSizes};
