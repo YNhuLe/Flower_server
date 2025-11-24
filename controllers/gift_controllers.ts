@@ -12,7 +12,7 @@ const getAllGifts = async (req: Request, res: Response): Promise<void> => {
       .join("gift_categories", "gift_items.category_id", "gift_categories.id")
       .select("gift_items.*", "gift_categories.*");
     res.status(200).json(data);
-    console.log(data);
+    // console.log(data);
   } catch (error: any) {
     res.status(400).send(`Error fetching gifts: ${error.message || error}`);
   }
@@ -25,7 +25,7 @@ const getAllGiftCategories = async (req: Request, res: Response): Promise<void> 
       "gift_categories"
     ).select("category_name");
     res.status(200).json(giftCategories);
-    console.log("Gift categories", giftCategories);
+    // console.log("Gift categories", giftCategories);
   } catch (error: any) {
     res
       .status(400)
