@@ -1,6 +1,9 @@
 import initKnex from "knex";
 import configuration from "../knexfile.js";
 import type { Request, Response } from "express";
+import generateRecommendation from "../services/gemini.js";
+import type { QuizAnswer } from "../models/plant-quiz.js";
+     
 const knex = initKnex(configuration);
 
 //get the quiz questions and options
@@ -53,34 +56,56 @@ const getQuizQuestionOptions = async (
   }
 };
 
-//POST quiz/answers
-//insert answer from users into the table quiz_answers in database
 
-const postQuizPlantAnswer = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    //get answer that align with the user_id
-    const { user_id, answers } = req.body;
 
-    //loop through the answer and insert the data into the quiz_answer table align with the user_id
-    for (const ans of answers) {
-      await knex.raw(
-        `
-    
-    INSERT INTO quiz_answers (user_id, question_id, answer_value)
-    VALUES ($1, $2, $3)`,
-        [user_id, ans.question_id, ans.answer_value]
-      );
-    }
-    res.json({ status: "success" });
-  } catch (error: any) {
-    res
-      .status(400)
-      .send(
-        `Error inserting quiz answers into the quiz_answers table! ${error.message}`
-      );
+//post send user's input to server so AI can generate the recommendations
+ const postQuizPlantRecommendations = async(
+  req: Request, res:Response
+ ): Promise<void> =>{
+
+  const {user_id} = req.body;
+  try{
+
+    const answers = await knex.raw(`
+      
+      SELECT q.question_key, a.answer_value 
+      FROM quiz_answers a
+      JOIN quiz_questions  q
+      ON a.question_id = q.id
+      WHERE a.user_id`, [user_id])
+    let candidatePlant = await knex.raw(`
+      SELECT common_name, light, humidity, avoid_types, planting_level FROM plants`);
+
+   
+      const avoid = answers.rows.find((avoinPlant: QuizAnswer) => avoinPlant.question_key === "avoid_types");
+      if(avoid){
+        candidatePlant.rows = candidatePlant.rows.filter((plant: any)=> !plant.avoid_types.includes(avoid.answer_value)).slice(0, 30);
+      };
+
+
+      //set the prompt and output format 
+      const prompt = `
+User preferences: ${JSON.stringify(answers.rows)}
+Candidate plants: ${JSON.stringify(candidatePlant.rows)}
+
+Recommend the top 3 plants that best fit the user’s needs.
+Return the result as JSON in this format:
+[
+  { "plant": "Snake Plant", "reason": "Thrives in low light and minimal care" },
+  { "plant": "Peace Lily", "reason": "Handles moderate temps and improves air quality" }
+]
+`;
+
+const recommendations = await generateRecommendation(prompt);
+const validateRecommendation = JSON.parse(recommendations);
+
+
+
+
+
+  }catch(err:any){
+    res.status(400)
+    .send(`Error sending the user's input into the server!!!`);
   }
-};
-export { getQuizQuestionOptions, postQuizPlantAnswer };
+ }
+export { getQuizQuestionOptions, postQuizPlantRecommendations };
