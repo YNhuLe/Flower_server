@@ -3,6 +3,9 @@ import cors from "cors";
 import plantRoutes from "../routes/plants-routes.js"
 import gitfRoutes from "../routes/gift-routes.js";
 import quizRoutes from "../routes/plantQuiz-routes.js";
+import dotenv from "dotenv";
+dotenv.config();
+
 const app = express();
 const PORT = process.env.PORT ?? 3000;
 

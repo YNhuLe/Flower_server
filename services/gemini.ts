@@ -1,8 +1,10 @@
 import {GoogleGenerativeAI} from "@google/generative-ai";
+import dotenv from "dotenv";
 
-const generativeAI = new GoogleGenerativeAI(process.env.GEMINI_AI_KEY || "");
+dotenv.config();
+const generativeAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const model = generativeAI.getGenerativeModel({model: "gemini-1.5-flash"});
+const model = generativeAI.getGenerativeModel({model: "gemini-3-pro-preview"});
 
 
 const generateRecommendation = async (prompt : string) :Promise<string> =>{
