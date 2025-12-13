@@ -7,4 +7,4 @@ interface AIRecommendation{
 plant: string,
 reason: string
 }
-export type{QuizAnswer}
+export type{QuizAnswer, AIRecommendation}
