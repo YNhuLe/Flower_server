@@ -63,7 +63,9 @@ const getQuizQuestionOptions = async (
   req: Request, res:Response
  ): Promise<void> =>{
 
-  const {user_id} = req.body;
+  // const {user_id} = req.body;
+  const user_id = 123;
+  let candidatePlant: any;
   try{
 
     // const answers = await knex.raw(`
@@ -81,7 +83,7 @@ const getQuizQuestionOptions = async (
   { question_key: "temperature", answer_value: "moderate" }
 ]};
 
-let candidatePlant = { rows: [
+candidatePlant = { rows: [
   { common_name: "Snake Plant", light_requirements: "low", temperature_range: "moderate", avoid_types: "toxic" },
   { common_name: "Spider Plant", light_requirements: "low", temperature_range: "moderate", avoid_types: "safe" }
 ]};
@@ -108,7 +110,7 @@ Recommend the top 3 plants that best fit the user’s needs.
 Return ONLY valid JSON, no extra text.
 Return the result as JSON in this format:
 [
-  { "plant": "Snake Plant", "reason": "Thrives in low light and minimal care" },
+  { "plant": "Orchid", "reason": "Thrives in low light and minimal care" },
   { "plant": "Peace Lily", "reason": "Handles moderate temps and improves air quality" }
 ]
 `;
@@ -123,8 +125,12 @@ const validateAIResponse =AIResponse.filter((recom:AIRecommendation)=> candidate
 res.status(200).json({AIResponse: validateAIResponse})
 
   }catch(err:any){
+      console.error("Gemini error:", err);
     res.status(400)
     .send(`Error sending the user's input into the server! ${err.message}`);
+  
+
+  
   }
  }
 export { getQuizQuestionOptions, postQuizPlantRecommendations };
