@@ -3,7 +3,7 @@ import configuration from "../knexfile.js";
 import type { Request, Response } from "express";
 import generateRecommendation from "../services/gemini.js";
 import type { QuizAnswer, AIRecommendation } from "../models/plant-quiz.js";
-import type {Plant} from "../models/plants.js";
+import { log } from "console";
 const knex = initKnex(configuration);
 
 //get the quiz questions and options
@@ -62,65 +62,90 @@ const getQuizQuestionOptions = async (
  const postQuizPlantRecommendations = async(
   req: Request, res:Response
  ): Promise<void> =>{
-
+  console.log("req.body:", req.body);
   // const {user_id} = req.body;
-  const user_id = 123;
+
   let candidatePlant: any;
   try{
 
-    // const answers = await knex.raw(`
-      
-    //   SELECT q.question_key, a.answer_value 
-    //   FROM quiz_answers a
-    //   JOIN quiz_questions  q
-    //   ON a.question_id = q.id
-    //   WHERE a.user_id=?`, [user_id])
-    // let candidatePlant = await knex.raw(`
-    //   SELECT common_name, light, humidity, avoid_types, planting_level FROM plants`);
-      const answers = { rows: [
-  { question_key: "avoid_types", answer_value: "toxic" },
-  { question_key: "sunlight", answer_value: "low" },
-  { question_key: "temperature", answer_value: "moderate" }
-]};
-
-candidatePlant = { rows: [
-  { common_name: "Snake Plant", light_requirements: "low", temperature_range: "moderate", avoid_types: "toxic" },
-  { common_name: "Spider Plant", light_requirements: "low", temperature_range: "moderate", avoid_types: "safe" }
-]};
+//       const answers = { rows: [
+//   { question_key: "avoid_types", answer_value: "toxic" },
+//   { question_key: "light", answer_value: "low" },
+//   { question_key: "temperature", answer_value: "moderate" }
+// ]};
 
 
- const avoid = answers.rows.find((ans: QuizAnswer)=> ans.question_key === "avoid_types");
- const lightPref = answers.rows.find((ans: QuizAnswer) => ans.question_key === "sunlight");
- const tempPref = answers.rows.find((ans:QuizAnswer) => ans.question_key==="temperature");
+const {user_id,  answers} = req.body;
+if (!req.body || !req.body.answers) {
+  res.status(400).json({ error: "Missing answers in request body" });
+  return;
+}
 
- candidatePlant.rows = candidatePlant.rows.filter((plant: any) =>{
-  const notAvoided = !avoid || !plant.avoid_types.includes(avoid.answer_value);
+// console.log("Answers: ", answers)
+candidatePlant = {rows: await knex('plants').select('*') };
 
-  const matchesLight = !lightPref || plant.light_requirements === lightPref.answer_value;
-  const matchesTemp = !tempPref || plant.temperature_range === tempPref.answer_value;
+ const avoid = answers.find((ans: QuizAnswer)=> ans.question_key === "avoid_types");
+ const lightPref = answers.find((ans: QuizAnswer) => ans.question_key === "sunlight");
+ const tempPref = answers.find((ans:QuizAnswer) => ans.question_key==="temperature");
+ const humidityPref = answers.find((ans:QuizAnswer) => ans.question_key === "humidity");
+const levelPref = answers.find((ans:QuizAnswer) => ans.question_key === "plantinglevel");
 
-  return notAvoided && matchesLight && matchesTemp;
- }).slice(0, 30);
-      //set the prompt and output format 
-      const prompt = `
+
+// candidatePlant.rows = candidatePlant.rows.filter((plant: any) => {
+//   const notAvoided = !avoid || !avoid.answer_value.some((avoidVal: string) =>
+//     (plant.avoid_types || "").toLowerCase().includes(avoidVal.toLowerCase())
+//   );
+
+//   const matchesLight = !lightPref || plant.light?.toLowerCase() === lightPref.answer_value.toLowerCase();
+//   const matchesTemp = !tempPref || plant.temperature_range?.toLowerCase() === tempPref.answer_value.toLowerCase();
+//   const matchesHumidity = !humidityPref || plant.humidity?.toLowerCase() === humidityPref.answer_value.toLowerCase();
+//   const matchesLevel = !levelPref || plant.plantinglevel?.toLowerCase() === levelPref.answer_value.toLowerCase();
+
+//   return notAvoided && matchesLight && matchesTemp && matchesHumidity && matchesLevel;
+// }).slice(0, 30);
+
+
+
+const prompt = `
 User preferences: ${JSON.stringify(answers.rows)}
 Candidate plants: ${JSON.stringify(candidatePlant.rows)}
 
-Recommend the top 3 plants that best fit the user’s needs.
-Return ONLY valid JSON, no extra text.
-Return the result as JSON in this format:
+Select the top 3 plants ONLY from the candidate list.
+For each, include:
+- "plant": exact common_name from candidate list
+- "benefit": why it fits user preferences
+- "scoreMatch": numeric between 0 and 1 (dot decimals)
+
+Return valid JSON array with up to 3 items.
+
 [
-  { "plant": "Orchid", "reason": "Thrives in low light and minimal care" },
-  { "plant": "Peace Lily", "reason": "Handles moderate temps and improves air quality" }
+  {
+    "plant": "Snake Plant",
+    "benefit": "Excellent air purifier, thrives in low light, very low maintenance",
+    "scoreMatch": 0.92
+  },
+  {
+    "plant": "Spider Plant",
+    "benefit": "Pet-safe, adapts to moderate temperatures, improves indoor air quality",
+    "scoreMatch": 0.87
+  },
+  {
+    "plant": "Peace Lily",
+    "benefit": "Handles moderate humidity, removes toxins, adds greenery to shaded rooms",
+    "scoreMatch": 0.85
+  }
 ]
+
 `;
 
 //get recommendations from AI
 const recommendations = await generateRecommendation(prompt);
+
+let cleaned = recommendations.trim().replace(/```json|```/g, "");
 //convert the recommendation into JSON
-const AIResponse:AIRecommendation[] = JSON.parse(recommendations);
+const AIResponse:AIRecommendation[] = JSON.parse(cleaned);
 //check if the plant from AI recommendation match with any plant in the table;
-const validateAIResponse =AIResponse.filter((recom:AIRecommendation)=> candidatePlant.rows.some((p:any)=>p.common_name === recom.plant))
+const validateAIResponse =AIResponse.filter((recom:AIRecommendation)=> candidatePlant.rows.some((p:any)=>p.common_name.toLowerCase() === recom.plant.toLowerCase()))
 
 res.status(200).json({AIResponse: validateAIResponse})
 
