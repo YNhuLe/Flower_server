@@ -18,10 +18,10 @@ const generateRecommendation = async (prompt: string): Promise<string> => {
   });
   const text = response.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-  console.log(text);
+  // console.log(text);
   return text;
 };
 
-console.log(generateRecommendation(""));
+
 
 export default generateRecommendation;

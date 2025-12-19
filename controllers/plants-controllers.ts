@@ -72,16 +72,16 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
     console.log("getAllPlants - Total plants retrieved:", plants.length);
     console.log("getAllPlants - Testing console output");
 
-    if (plants.length > 0) {
-      console.log(
-        "getAllPlants - First Plant Data (Check Sizes & Prices):",
-        JSON.stringify(plants[0]?.sizes, null, 2)
-      );
-      console.log(
-        "getAllPlants - Full first plant:",
-        JSON.stringify(plants[0], null, 2)
-      );
-    }
+    // if (plants.length > 0) {
+    //   console.log(
+    //     "getAllPlants - First Plant Data (Check Sizes & Prices):",
+    //     JSON.stringify(plants[0]?.sizes, null, 2)
+    //   );
+    //   console.log(
+    //     "getAllPlants - Full first plant:",
+    //     JSON.stringify(plants[0], null, 2)
+    //   );
+    // }
 
     // Send response AFTER all logging
     res.status(200).json(plants);
@@ -112,7 +112,7 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
           `
         )
       )
-      .join("plant_sizes", "plants.id", "plant_sizes.plant_id")
+      .leftJoin("plant_sizes", "plants.id", "plant_sizes.plant_id")
       .where("plants.id", Number(id))
       .groupBy("plants.id")
       .first();
@@ -135,7 +135,10 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Convert numeric fields
-    const cleanedSizes = (data.sizes || []).map((size: any) => ({
+    const cleanedSizes = (data.sizes || [])
+    .filter((s: any) => s !== null
+)
+    .map((size: any) => ({
       ...size,
       original_price: Number(size.original_price),
       discount_percentage: Number(size.discount_percentage),
