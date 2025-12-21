@@ -14,14 +14,19 @@ const generateRecommendation = async (prompt: string): Promise<string> => {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    // contents:[{role: "user", parts: [{ text: "Forecast load and outage risk for Calgary" }]}],
   });
   const text = response.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-  // console.log(text);
   return text;
 };
 
 
 
+
 export default generateRecommendation;
+
+
+
+
+
+
+

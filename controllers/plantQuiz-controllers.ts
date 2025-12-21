@@ -3,7 +3,6 @@ import configuration from "../knexfile.js";
 import type { Request, Response } from "express";
 import generateRecommendation from "../services/gemini.js";
 import type { QuizAnswer, AIRecommendation } from "../models/plant-quiz.js";
-import { log } from "console";
 const knex = initKnex(configuration);
 
 //get the quiz questions and options
@@ -66,6 +65,8 @@ const getQuizQuestionOptions = async (
   // const {user_id} = req.body;
 
   let candidatePlant: any;
+
+
   try{
 
 //       const answers = { rows: [
@@ -104,10 +105,24 @@ const levelPref = answers.find((ans:QuizAnswer) => ans.question_key === "plantin
 //   return notAvoided && matchesLight && matchesTemp && matchesHumidity && matchesLevel;
 // }).slice(0, 30);
 
+// candidatePlant.rows = candidatePlant.rows.filter((plant: any) => {
+//   const notAvoided = !avoid || !avoid.answer_value.some((avoidVal: string) =>
+//     (plant.avoid_types || "").toLowerCase().includes(avoidVal.toLowerCase())
+//   );
+
+//   const matchesLight = !lightPref || (LIGHT_MAP[lightPref.answer_value.toLowerCase() as keyof typeof LIGHT_MAP]?.some(keyword=> plant.light?.toLowerCase().includes(keyword)) ?? false);
+//   const matchesTemp = !tempPref || plant.temperature_range?.toLowerCase() === tempPref.answer_value.toLowerCase();
+//   const matchesHumidity = !humidityPref || plant.humidity?.toLowerCase() === humidityPref.answer_value.toLowerCase();
+//   const matchesLevel = !levelPref || plant.plantinglevel?.toLowerCase() === levelPref.answer_value.toLowerCase();
+
+//   return notAvoided && matchesLight && matchesTemp && matchesHumidity && matchesLevel;
+// }).slice(0, 30);
+
+console.log("candidates: ", candidatePlant.rows)
 
 
 const prompt = `
-User preferences: ${JSON.stringify(answers.rows)}
+User preferences: ${JSON.stringify(answers)}
 Candidate plants: ${JSON.stringify(candidatePlant.rows)}
 
 Select the top 3 plants ONLY from the candidate list.
