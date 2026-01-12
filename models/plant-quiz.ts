@@ -5,6 +5,7 @@
 
 interface AIRecommendation{
 plant: string,
-reason: string
+reasoning: string,
+scoreMatch: number
 }
 export type{QuizAnswer, AIRecommendation}

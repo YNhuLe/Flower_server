@@ -3,9 +3,7 @@ import configuration from "../knexfile.js";
 import type { Request, Response } from "express";
 import type { Plant, PlantSize, PlantWithSizes } from "../models/plants";
 const knex = initKnex(configuration);
-
 //get all plants
-
 const getAllPlants = async (req: Request, res: Response): Promise<void> => {
   try {
     const data = await knex("plants")
@@ -94,28 +92,59 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
 const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
     const data = await knex("plants")
-      .select(
-        "plants.*",
-        knex.raw(
-          `
-          jsonb_agg(
-          jsonb_build_object(
-            'size_id', plant_sizes.size_id,
-            'plant_id', plant_sizes.plant_id,
-            'size', plant_sizes.size,
-            'original_price', plant_sizes.original_price,
-            'discount_percentage', plant_sizes.discount_percentage,
-            'discounted_price', plant_sizes.original_price * (1 - plant_sizes.discount_percentage/100.0)
-          )
-        ) AS sizes
-          `
+  .select(
+    knex.raw(`
+      plants.id,
+      plants.category_id,
+      plants.common_name,
+      plants.scientific_name,
+      plants.description,
+      plants.image_url,
+      plants.light,
+      plants.watering_requirements,
+      plants.humidity_preference,
+      plants.temperature_range,
+      plants.soil_type,
+      plants.fertilizer_info,
+      plants.potting_tips,
+      plants.common_problems,
+      plants.growth_habit,
+      plants.mature_width,
+      plants.mature_height,
+      plants.bloom_info,
+      plants.is_pet_friendly,
+      plants.air_purifying,
+      plants.humidity,
+      plants.light,
+      plants.stock_quantity,
+      plants.shipping_info,
+      plants.rating,
+      plants.num_reviews,
+      plants.isnewarrival,
+      plants.plantinglevel,
+      plants.isonsale,
+      plants.benefits
+    `),
+    knex.raw(`
+      jsonb_agg(
+        jsonb_build_object(
+          'size_id', plant_sizes.size_id,
+          'plant_id', plant_sizes.plant_id,
+          'size', plant_sizes.size,
+          'original_price', plant_sizes.original_price,
+          'discount_percentage', plant_sizes.discount_percentage,
+          'discounted_price', plant_sizes.original_price * (1 - plant_sizes.discount_percentage / 100.0)
         )
-      )
-      .leftJoin("plant_sizes", "plants.id", "plant_sizes.plant_id")
-      .where("plants.id", Number(id))
-      .groupBy("plants.id")
-      .first();
+      ) AS sizes
+    `)
+  )
+  .leftJoin("plant_sizes", "plants.id", "plant_sizes.plant_id")
+  .where("plants.id", Number(id))
+  .groupBy("plants.id")
+  .first();
+
 
     if (!data) {
       res.status(404).send("Plant not found.");
@@ -145,8 +174,23 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
       discounted_price: Number(size.discounted_price)
     }));
 
+    // const normalised = {
+    //   ...data, 
+    //   id: data.id,
+    //   plant_id:data.id, 
+    //   category_id : data.category_id,
+    //   categoryId : data.category_id,
+    //   benefits: parsedBenefits,
+    //   sizes: cleanedSizes,
+    //   rating: Number(data.rating),
+    //   num_reviews: Number(data.num_reviews),
+    //   stock_quantity: Number(data.stock_quantity)
+    // };
+
     const normalised = {
       ...data,
+      id: data.id,
+      plant_id: data.id,
       benefits: parsedBenefits,
       sizes: cleanedSizes,
       rating: Number(data.rating),
@@ -160,7 +204,7 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-//get plant info and their category
+//get plant info and their category==========================
 const getPlantCate = async (req: Request, res: Response): Promise<void> => {
   try {
     const plantCategory = await knex("plants")
@@ -183,7 +227,7 @@ const getPlantCate = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-//get list of plants base on category
+//get list of plants base on category============================
 const getPlantList = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -209,7 +253,7 @@ const getPlantList = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-//get all the giftboxes
+//get all the giftboxes===========================
 const getGiftBox = async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await knex.raw(
@@ -256,7 +300,7 @@ const getGiftBox = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-//get giftbox base on the Id
+//get giftbox base on the Id==========================
 
 const getGiftBoxById = async (req: Request, res: Response): Promise<void> => {
   try {
