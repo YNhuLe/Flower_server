@@ -83,7 +83,10 @@ if (!req.body || !req.body.answers) {
 }
 
 // console.log("Answers: ", answers)
-candidatePlant = {rows: await knex('plants').select('*') };
+candidatePlant = {rows: await knex('plants')
+  .join("plant_sizes", "plant_sizes.plant_id", "plants.id")
+  
+  .select('*') };
 
  const avoid = answers.find((ans: QuizAnswer)=> ans.question_key === "avoid_types");
  const lightPref = answers.find((ans: QuizAnswer) => ans.question_key === "sunlight");
@@ -130,6 +133,7 @@ For each, include:
 - "plant": exact common_name from candidate list
 - "benefit": why it fits user preferences
 - "scoreMatch": numeric between 0 and 1 (dot decimals)
+- "reasoning": "reasoning": a short one‑sentence explanation showing how the plant fits the user's preferences.
 
 Return valid JSON array with up to 3 items.
 
@@ -137,17 +141,20 @@ Return valid JSON array with up to 3 items.
   {
     "plant": "Snake Plant",
     "benefit": "Excellent air purifier, thrives in low light, very low maintenance",
-    "scoreMatch": 0.92
+    "scoreMatch": 0.92,
+    "reasoning":“Matches low‑light and low‑humidity needs, thrives with minimal care, and avoids restricted plant types.”
   },
   {
     "plant": "Spider Plant",
     "benefit": "Pet-safe, adapts to moderate temperatures, improves indoor air quality",
-    "scoreMatch": 0.87
+    "scoreMatch": 0.87,
+    "reasoning":“Adaptable to bright‑indirect light, moderate humidity, and beginner‑friendly while avoiding your flagged plant types.”
   },
   {
     "plant": "Peace Lily",
     "benefit": "Handles moderate humidity, removes toxins, adds greenery to shaded rooms",
-    "scoreMatch": 0.85
+    "scoreMatch": 0.85,
+    "reasoning":“Fits moderate humidity and indirect light preferences, easy to maintain, and safe for your avoid list.”
   }
 ]
 
@@ -159,10 +166,24 @@ const recommendations = await generateRecommendation(prompt);
 let cleaned = recommendations.trim().replace(/```json|```/g, "");
 //convert the recommendation into JSON
 const AIResponse:AIRecommendation[] = JSON.parse(cleaned);
-//check if the plant from AI recommendation match with any plant in the table;
-const validateAIResponse =AIResponse.filter((recom:AIRecommendation)=> candidatePlant.rows.some((p:any)=>p.common_name.toLowerCase() === recom.plant.toLowerCase()))
 
-res.status(200).json({AIResponse: validateAIResponse})
+//merge AI recommendations with the DB rows
+const mergeRecommendations = AIResponse.map((recom : AIRecommendation) =>{
+  const match = candidatePlant.rows.find(
+    (p: any) => p.common_name.toLowerCase()=== recom.plant.toLowerCase()
+  );
+
+  if(!match) return null
+  return {
+    ...match,
+     scoreMatch: recom.scoreMatch,
+     reasoning: recom.reasoning
+  }
+}).filter(Boolean);
+//check if the plant from AI recommendation match with any plant in the table;
+// const validateAIResponse =AIResponse.filter((recom:AIRecommendation)=> candidatePlant.rows.some((p:any)=>p.common_name.toLowerCase() === recom.plant.toLowerCase()))
+
+res.status(200).json({recommendations: mergeRecommendations})
 
   }catch(err:any){
       console.error("Gemini error:", err);

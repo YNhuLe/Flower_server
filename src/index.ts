@@ -3,6 +3,7 @@ import cors from "cors";
 import plantRoutes from "../routes/plants-routes.js"
 import gitfRoutes from "../routes/gift-routes.js";
 import quizRoutes from "../routes/plantQuiz-routes.js";
+import saleDataRoutes from "../routes/saleData_route.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use("/", plantRoutes);
 app.use("/", gitfRoutes);
 app.use("/",quizRoutes);
+app.use("/", saleDataRoutes);
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
