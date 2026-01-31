@@ -8,4 +8,4 @@ plant: string,
 reasoning: string,
 scoreMatch: number
 }
-export type{QuizAnswer, AIRecommendation}
+export type{QuizAnswer, AIRecommendation};

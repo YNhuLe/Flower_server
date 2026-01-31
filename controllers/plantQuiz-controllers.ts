@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 import generateRecommendation from "../services/gemini.js";
 import type { QuizAnswer, AIRecommendation } from "../models/plant-quiz.js";
 import {embed} from "../utils/embed.js";
+import type { Plant, PlantWithSizes } from "models/plants.js";
 
 
 const knex = initKnex(configuration);
@@ -69,8 +70,7 @@ function builtQuizSummary(answers: QuizAnswer[]) {
 Sunlight: ${map.sunlight},
 Temperature: ${map.temperature},
 Humidity: ${map.humidity},
-Care: ${map.care_commitment},
-RoomType: ${map.room_type},
+Care: ${map.care_level},
 PlantType : ${map.plant_interest},
 Avoid:${Array.isArray(map.avoid_types) ? map.avoid_types.join(", ") : map.avoid_types}
   
@@ -86,8 +86,6 @@ const postQuizPlantRecommendations = async (
   console.log("req.body:", req.body);
   // const {user_id} = req.body;
 
-  let candidatePlant: any;
-
   try {
     const { user_id, answers } = req.body;
     if (!answers) {
@@ -95,21 +93,28 @@ const postQuizPlantRecommendations = async (
       return;
     }
     const quizSummary = builtQuizSummary(answers);
-    const quizEmbedding = embed(quizSummary);
+    const quizEmbedding = await embed(quizSummary);
+    // console.log("quizEmbedding:", quizEmbedding, typeof quizEmbedding);
+
     if (!req.body || !req.body.answers) {
       res.status(400).json({ error: "Missing answers in request body" });
       return;
     }
+function toPgVector(arr: number[]) {
+  return `[${arr.join(",")}]`;
+}
+
 
     const vectorMatches = await knex.raw(
-      `SELECT *, (plant_embedding <-> ?) AS distance
+      `SELECT *, (plant_embedding <-> (?::vector)) AS distance
   
   FROM plants
   ORDER BY distance ASC
-  LIMIT 30`,
-      [quizEmbedding],
+  LIMIT 5`,
+      [toPgVector(quizEmbedding)],
     );
 
+  
     const prompt = `
 You are a plant recommendation engine.
 
@@ -125,7 +130,7 @@ For each selected plant, return an object with:
 - "plant": exact common_name from the candidate list
 - "benefit": a short description of why this plant fits the user's needs
 - "scoreMatch": a number between 0 and 1 (decimal)
-- "reasoning": one sentence explaining the match
+- "reasoning": 3 bullet points explaining the match less than 50 characters.
 
 Rules:
 - Only choose plants from the candidate list.
@@ -139,7 +144,11 @@ Output format example (structure only, not content):
     "plant": "Plant Name",
     "benefit": "Short benefit text",
     "scoreMatch": 0.85,
-    "reasoning": "One sentence explaining the match."
+    "reasoning": [
+      "Bullet point 1 explaining the match.",
+      "Bullet point 2 explaining the match.",
+      "Bullet point 3 explaining the match."
+    ]
   }
 ]
 `;
@@ -152,18 +161,29 @@ Output format example (structure only, not content):
     const AIResponse: AIRecommendation[] = JSON.parse(cleaned);
 
     //merge AI recommendations with the DB rows
-    const mergeRecommendations = AIResponse.map((recom: AIRecommendation) => {
-      const match = vectorMatches.rows.find(
-        (p: any) => p.common_name.toLowerCase() === recom.plant.toLowerCase(),
-      );
+    const mergeRecommendations = await Promise.all(
+      AIResponse.map(async (recom: AIRecommendation) => {
+        const match = vectorMatches.rows.find(
+          (p: Plant) => p.common_name.toLowerCase() === recom.plant.toLowerCase(),
 
-      if (!match) return null;
-      return {
-        ...match,
-        scoreMatch: recom.scoreMatch,
-        reasoning: recom.reasoning,
-      };
-    }).filter(Boolean);
+    
+);
+// console.log("DB match row:", match);
+
+    
+if (!match) return null;
+const sizes = await knex("plant_sizes").where({plant_id: match.id}).select("*");
+
+        return {
+          ...match,
+          sizes,
+          scoreMatch: recom.scoreMatch,
+          reasoning: recom.reasoning,
+        }as PlantWithSizes & { scoreMatch: number; reasoning: string[]
+
+        };
+      })
+    ).then(results => results.filter(Boolean));
     res.status(200).json({ recommendations: mergeRecommendations });
   } catch (err: any) {
     console.error("Gemini error:", err);
