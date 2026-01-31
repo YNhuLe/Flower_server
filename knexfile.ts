@@ -11,6 +11,10 @@ const config: Knex.Config = {
     port: Number(process.env.DB_PORT) || 5432,
   },
   pool: { min: 2, max: 10 },
+  migrations:{
+    directory:"./migrations",
+    extension:"ts"
+  }
 };
 
 export default config;
