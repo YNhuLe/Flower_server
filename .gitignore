@@ -25,3 +25,4 @@ dist-ssr
 .env
 firebase/*.json
 firebase/*.ts
+serviceAccountKey.json
