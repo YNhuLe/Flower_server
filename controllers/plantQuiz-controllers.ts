@@ -5,6 +5,8 @@ import generateRecommendation from "../services/gemini.js";
 import type { QuizAnswer, AIRecommendation } from "../models/plant-quiz.js";
 import {embed} from "../utils/embed.js";
 import type { Plant, PlantWithSizes } from "models/plants.js";
+import { stringify } from "querystring";
+import { log } from "console";
 
 
 const knex = initKnex(configuration);
@@ -184,7 +186,19 @@ const sizes = await knex("plant_sizes").where({plant_id: match.id}).select("*");
         };
       })
     ).then(results => results.filter(Boolean));
-    res.status(200).json({ recommendations: mergeRecommendations });
+    // res.status(200).json({ recommendations: mergeRecommendations });
+    //insert top 3 recommendations into the quiz_sessions table for later retrieval in the chat flow
+    const [session] = await knex('quiz_sessions')
+    .insert({user_id: user_id || null,
+      answers: JSON.stringify(answers),
+      top3_plant_ids: mergeRecommendations.map((p: any) => p.id)
+
+    }).returning('*');
+    console.log('inserted the data')
+     res.status(200).json({
+      session_id: session.id,
+      recommendations: mergeRecommendations
+     })
   } catch (err: any) {
     console.error("Gemini error:", err);
     res
