@@ -5,6 +5,7 @@ import gitfRoutes from "../routes/gift-routes.js";
 import quizRoutes from "../routes/plantQuiz-routes.js";
 import saleDataRoutes from "../routes/saleData_route.js";
 import userRoutes from "../routes/user-routes.js";
+import chatRoutes from "../routes/chat-routes.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use("/", plantRoutes);
 app.use("/", gitfRoutes);
 app.use("/",quizRoutes);
+app.use("/", chatRoutes);
 app.use("/", saleDataRoutes);
 app.use("/", userRoutes);
 app.listen(PORT, () => {
