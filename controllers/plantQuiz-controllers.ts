@@ -3,11 +3,8 @@ import configuration from "../knexfile.js";
 import type { Request, Response } from "express";
 import generateRecommendation from "../services/gemini.js";
 import type { QuizAnswer, AIRecommendation } from "../models/plant-quiz.js";
-import {embed} from "../utils/embed.js";
+import { embed } from "../utils/embed.js";
 import type { Plant, PlantWithSizes } from "models/plants.js";
-import { stringify } from "querystring";
-import { log } from "console";
-
 
 const knex = initKnex(configuration);
 
@@ -98,14 +95,13 @@ const postQuizPlantRecommendations = async (
     const quizEmbedding = await embed(quizSummary);
     // console.log("quizEmbedding:", quizEmbedding, typeof quizEmbedding);
 
-    if (!req.body || !req.body.answers) {
-      res.status(400).json({ error: "Missing answers in request body" });
-      return;
+    // if (!req.body || !req.body.answers) {
+    //   res.status(400).json({ error: "Missing answers in request body" });
+    //   return;
+    // }
+    function toPgVector(arr: number[]) {
+      return `[${arr.join(",")}]`;
     }
-function toPgVector(arr: number[]) {
-  return `[${arr.join(",")}]`;
-}
-
 
     const vectorMatches = await knex.raw(
       `SELECT *, (plant_embedding <-> (?::vector)) AS distance
@@ -116,7 +112,6 @@ function toPgVector(arr: number[]) {
       [toPgVector(quizEmbedding)],
     );
 
-  
     const prompt = `
 You are a plant recommendation engine.
 
@@ -166,39 +161,37 @@ Output format example (structure only, not content):
     const mergeRecommendations = await Promise.all(
       AIResponse.map(async (recom: AIRecommendation) => {
         const match = vectorMatches.rows.find(
-          (p: Plant) => p.common_name.toLowerCase() === recom.plant.toLowerCase(),
+          (p: Plant) =>
+            p.common_name.toLowerCase() === recom.plant.toLowerCase(),
+        );
+        // console.log("DB match row:", match);
 
-    
-);
-// console.log("DB match row:", match);
-
-    
-if (!match) return null;
-const sizes = await knex("plant_sizes").where({plant_id: match.id}).select("*");
+        if (!match) return null;
+        const sizes = await knex("plant_sizes")
+          .where({ plant_id: match.id })
+          .select("*");
 
         return {
           ...match,
           sizes,
           scoreMatch: recom.scoreMatch,
           reasoning: recom.reasoning,
-        }as PlantWithSizes & { scoreMatch: number; reasoning: string[]
-
-        };
-      })
-    ).then(results => results.filter(Boolean));
-    // res.status(200).json({ recommendations: mergeRecommendations });
+        } as PlantWithSizes & { scoreMatch: number; reasoning: string[] };
+      }),
+    ).then((results) => results.filter(Boolean));
     //insert top 3 recommendations into the quiz_sessions table for later retrieval in the chat flow
-    const [session] = await knex('quiz_sessions')
-    .insert({user_id: user_id || null,
-      answers: JSON.stringify(answers),
-      top3_plant_ids: mergeRecommendations.map((p: any) => p.id)
-
-    }).returning('*');
-    console.log('inserted the data')
-     res.status(200).json({
+    const [session] = await knex("quiz_sessions")
+      .insert({
+        user_id: user_id || null,
+        answers: JSON.stringify(answers),
+        top3_plant_ids: mergeRecommendations.map((p: any) => p.id),
+      })
+      .returning("*");
+    console.log("inserted the data");
+    res.status(200).json({
       session_id: session.id,
-      recommendations: mergeRecommendations
-     })
+      recommendations: mergeRecommendations,
+    });
   } catch (err: any) {
     console.error("Gemini error:", err);
     res

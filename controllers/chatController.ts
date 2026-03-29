@@ -87,7 +87,7 @@ const executeTool = async (call: any) => {
   try {
     const { session_id, message } = req.body;
 
-    // 1. Load quiz context
+//fetch the quiz session data to provide context to the agent
     const session = await knex("quiz_sessions")
       .where({ id: session_id })
       .first();
@@ -97,17 +97,17 @@ const executeTool = async (call: any) => {
       return;
     }
 
-    // 2. Load top 3 plants from quiz
+   // get top 3 recommoendations from the plants table based on the session.top3_plant_ids array
     const top3 = await knex("plants")
       .whereIn("id", session.top3_plant_ids)
       .select("common_name", "slug", "is_pet_friendly");
 
-    // 3. Load chat history
+
     const history = await knex("chat_history")
       .where({ session_id })
       .orderBy("created_at", "asc");
 
-    // 4. Build messages array
+    // Construct messages for Claude
     const messages = [
       ...history.map((h: any) => ({
         role: h.role,
@@ -116,7 +116,7 @@ const executeTool = async (call: any) => {
       { role: "user", content: message }
     ];
 
-    // 5. System prompt with quiz context
+    //  System prompt with quiz context
     const systemPrompt = `
       You are a friendly plant advisor.
 
@@ -129,7 +129,7 @@ const executeTool = async (call: any) => {
       Keep replies conversational and concise.
     `;
 
-    // 6. Agent loop
+//AGENT LOOP and pick out tools
 
     console.log("messages being sent:", JSON.stringify(messages, null, 2));
 console.log("tools:", JSON.stringify(tools, null, 2));
@@ -147,7 +147,7 @@ console.log("tools:", JSON.stringify(tools, null, 2));
 
     const reply = response.content.find((c: any) => c.type === "text")?.text;
 
-    // 7. Save to chat history
+ //save the chat history to the database
     await knex("chat_history").insert([
       { session_id, role: "user",      message },
       { session_id, role: "assistant", message: reply }
@@ -156,9 +156,6 @@ console.log("tools:", JSON.stringify(tools, null, 2));
     res.status(200).json({ reply });
 
   } catch (err: any) {
-    // console.error("Chat error:", err);
-    // res.status(500).json({ error: err.message });
-
      console.error("Chat error full details:", err.response?.data || err.message || err);
   res.status(500).json({ 
     error: err.response?.data?.error?.message || err.message || "Unknown error"
