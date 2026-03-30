@@ -5,8 +5,8 @@ const claudeApi = axios.create(
         baseURL: 'https://api.anthropic.com/v1',
         headers:{
             'Content-Type': 'application/json',
-            'X-API-Key': process.env.ANTHROPIC_API_KEY || '',
-            anthropic_version: "2023-06-01",
+            'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+            'anthropic-version': "2023-06-01",
         }
     }
 );
