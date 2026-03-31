@@ -1,12 +1,10 @@
 import initKnex from "knex";
 import configuration from "../knexfile.js";
-import type { Request, Response } from "express";
 const knex = initKnex(configuration);
 //GET /session/:session_id for guest users
 const getSessionById = async (req: any, res: any) => {
   try {
     const { session_id } = req.params;
-
     //look up the session in the DB by session_id, if not found return 404
     const session = await knex("quiz_sessions")
       .where({ id: session_id })
@@ -27,7 +25,7 @@ const getSessionById = async (req: any, res: any) => {
         const plantSizes = await knex("plant_sizes")
           .where({ plant_id: plant.id })
           .select("*");
-        return { ...plant, plantSizes };
+        return { ...plant, sizes: plantSizes };
       }),
     );
 
@@ -36,7 +34,7 @@ const getSessionById = async (req: any, res: any) => {
       recommendations: sizes,
     });
   } catch (error: any) {
-    res.status(400).json({
+    res.status(500).json({
       error: `Error fetching session data: ${error.message}`,
     });
   }
@@ -67,7 +65,7 @@ const getSessionByUserId = async (req: any, res: any) => {
         const plantSizes = await knex("plant_sizes")
           .where({ plant_id: plant.id })
           .select("*");
-        return { ...plant, plantSizes };
+        return { ...plant, sizes: plantSizes };
       }),
     );
 
@@ -77,7 +75,7 @@ const getSessionByUserId = async (req: any, res: any) => {
       recommendations: sizes,
     });
   } catch (error: any) {
-    res.status(400).json({
+    res.status(500).json({
       error: `Error fetching session data by user_id: ${error.message}`,
     });
   }
