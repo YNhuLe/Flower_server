@@ -144,19 +144,48 @@ const postChat = async (req: any, res: any): Promise<void> => {
     ];
 
     //  System prompt with quiz context
-    const systemPrompt = `
-      You are a friendly plant advisor.
+//     const systemPrompt = `
+//       You are a friendly plant advisor.
 
-      The user's quiz answers: ${JSON.stringify(session.answers)}
-      Their top 3 recommended plants: ${JSON.stringify(top3)}
+//       The user's quiz answers: ${JSON.stringify(session.answers)}
+//       Their top 3 recommended plants: ${JSON.stringify(top3)}
 
    
-      Rules:
+//       Rules:
+// - Use get_care_guide for watering, light, soil or care questions
+// - Use check_pet_safety when pets, cats or dogs are mentioned
+// - Use get_plant_page to suggest the product page at the end
+// - Keep replies short, warm and conversational
+//     `;
+
+const systemPrompt = `
+You are a friendly plant advisor.
+
+User profile: ${JSON.stringify(session.answers)}
+Top 3 plants: ${JSON.stringify(top3)}
+
+Rules:
 - Use get_care_guide for watering, light, soil or care questions
 - Use check_pet_safety when pets, cats or dogs are mentioned
 - Use get_plant_page to suggest the product page at the end
 - Keep replies short, warm and conversational
-    `;
+
+When showing care information, always format it like this:
+**Complete Care Guide for [Plant Name]:**
+💧 **Watering:** [watering info]
+☀️ **Light:** [light info]
+🌡️ **Temperature:** [temperature info]
+💨 **Humidity:** [humidity info]
+🌱 **Fertilizing:** [fertilizing info]
+🌿 **Soil:** [soil info]
+
+For pet safety, format it like this:
+✅ **Pet Safe:** Yes — safe for cats and dogs
+⚠️ **Pet Safety:** [plant name] is toxic to [cats/dogs] — [toxicity notes]
+
+For product page suggestions, format it like this:
+🛒 **View [Plant Name]:** [page_url]
+`;
 
     //AGENT LOOP and pick out tools
 
@@ -210,15 +239,15 @@ const postChat = async (req: any, res: any): Promise<void> => {
 };
 //--------------------------Get the chat from the chat_history table based on the session_id
 /** 
- * API route: GET /chat/:session_id/history
+ * API route: GET /chat/:user_id/history
  * 
- * Database table: chat_history, chat_sessions
+ * Database table: chat_history, quiz_sessions
  * 
  * Description:
  * This endpoint queries the `chat_history` table and returns all messages
- * associated with a given session ID. Messages are ordered chronologically
+ * associated with a given user's most recent session. Messages are ordered chronologically
  * based on their creation timestamp.
- * @param req - The request object containing the session_id parameter.
+ * @param req - The request object containing the user_id parameter.
  * @param res - The response object used to send the chat history.
 * @returns A JSON response containing the chat history or an error message.
  
