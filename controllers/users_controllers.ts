@@ -80,7 +80,7 @@ const addUser = async (req: Request, res: Response): Promise<void> => {
 
 //Verify the token that being sent from the Firebase
 if (!process.env.AUTH0_AUDIENCE) {
-  throw new Error("MIssing AUTH0_AUDIENCE in environment variables.");
+  throw new Error("Missing AUTH0_AUDIENCE in environment variables.");
 }
 
 const verifyAuth0Token = auth({
@@ -90,18 +90,18 @@ const verifyAuth0Token = auth({
 });
 // Controller function to add a new user from Google sign up
 const createOrCreateLoginGoogleUser = async (req: Request, res: Response) => {
-  const auth0User = req.auth as any;
+  const auth0User = req.auth as any;    
   if (!auth0User) {
     return res.status(401).json({ message: "User not authenticated." });
   }
-
-  const email = auth0User["https://eververdant.com/email"];
-  const name = auth0User["https://eververdant.com/name"];
-  const auth0_id = auth0User.sub;
+  const payload = auth0User.payload || auth0User; 
+  const email = payload["https://eververdant.com/email"];
+  const name = payload["https://eververdant.com/name"];
+  const auth0_id = payload.sub;
 
   console.log("Extracted data:", { email, name, auth0_id });
   if (!email || !name || !auth0_id) {
-    return res
+     return res
       .status(400)
       .json({ message: "Required user information missing in token." });
   }
@@ -138,11 +138,11 @@ const getUserProfile = async (req: Request, res: Response) => {
     return res.status(401).json({ message: "User not authenticated" });
   }
   const decoded = req.auth as any;
-
-  const email = decoded["https://eververdant.com/email"] || decoded.email;
-  const name = decoded["https://eververdant.com/name"] || decoded.name;
-  const auth0_id = decoded.sub;
-  console.log("Decoded token in getUserProfile: ", email, name, decoded);
+const payload = decoded.payload || decoded;
+  const email = payload["https://eververdant.com/email"] || payload.email;
+  const name = payload["https://eververdant.com/name"] || payload.name;
+  const auth0_id = payload.sub;
+  console.log("Decoded token in getUserProfile: ", email, name, payload);
   if (!email || !auth0_id) {
     return res
       .status(400)
