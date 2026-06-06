@@ -9,6 +9,7 @@ const knex = initKnex(configuration);
 
 // Controller function to add a new user from Email/Passwword sign up
 const addUser = async (req: Request, res: Response): Promise<void> => {
+  console.log("addUser req.body:", JSON.stringify(req.body, null, 2));
   const { name, email, phone_number, uid } = req.body;
 
   if (!name || !email || !phone_number || !uid) {
@@ -78,6 +79,32 @@ const addUser = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+//Add profile picture to the user, this is for the case when user sign up using Email/Password
+const addProfilePicture = async (req: Request, res: Response) => {
+  try {
+    const { auth0Id } = req.params;
+    const { avatar_url } = req.body;
+    if (!auth0Id || !avatar_url) {
+      return res
+        .status(400)
+        .json({ message: "missing required fields: auth0Id, avatar_url" });
+    }
+
+    const user = await knex("users")
+    .where({auth0_id: auth0Id})
+    .update({avatar_url})
+    .returning("*");
+     if (!user || user.length === 0){
+      return res.status(404).json({ message: "User not found" });
+     }
+     res.json(user[0]);
+  } catch (error: any) {
+    return res.status(400).json({
+      message: `Error adding profile picture: ${error.message || error}`,
+    });
+  }
+};
+
 //Verify the token that being sent from the Firebase
 if (!process.env.AUTH0_AUDIENCE) {
   throw new Error("Missing AUTH0_AUDIENCE in environment variables.");
@@ -88,20 +115,22 @@ const verifyAuth0Token = auth({
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
   tokenSigningAlg: "RS256",
 });
+
 // Controller function to add a new user from Google sign up
 const createOrCreateLoginGoogleUser = async (req: Request, res: Response) => {
-  const auth0User = req.auth as any;    
+  const auth0User = req.auth as any;
   if (!auth0User) {
     return res.status(401).json({ message: "User not authenticated." });
   }
-  const payload = auth0User.payload || auth0User; 
+  const payload = auth0User.payload || auth0User;
   const email = payload["https://eververdant.com/email"];
   const name = payload["https://eververdant.com/name"];
+  const picture = payload["https://eververdant.com/picture"];
   const auth0_id = payload.sub;
 
-  console.log("Extracted data:", { email, name, auth0_id });
+  console.log("Extracted data:", { email, name, picture, auth0_id });
   if (!email || !name || !auth0_id) {
-     return res
+    return res
       .status(400)
       .json({ message: "Required user information missing in token." });
   }
@@ -113,11 +142,11 @@ const createOrCreateLoginGoogleUser = async (req: Request, res: Response) => {
           email,
           name,
           auth0_id,
-          // ,avatar_url: picture
+          avatar_url: picture,
           //in case user already exists with the same email but different auth0_id, we will update the name and auth0_id to the new one, this is for the case when user sign up with email/password first then later sign up with google with the same email, we want to link the google account to the existing user
         })
         .onConflict("email")
-        .merge({ name, auth0_id })
+        .merge({ name, auth0_id, avatar_url: picture })
         .returning("*");
 
       if (!newUser) {
@@ -138,9 +167,10 @@ const getUserProfile = async (req: Request, res: Response) => {
     return res.status(401).json({ message: "User not authenticated" });
   }
   const decoded = req.auth as any;
-const payload = decoded.payload || decoded;
+  const payload = decoded.payload || decoded;
   const email = payload["https://eververdant.com/email"] || payload.email;
   const name = payload["https://eververdant.com/name"] || payload.name;
+  const picture = payload["https://eververdant.com/picture"] || payload.picture;
   const auth0_id = payload.sub;
   console.log("Decoded token in getUserProfile: ", email, name, payload);
   if (!email || !auth0_id) {
@@ -166,4 +196,5 @@ export {
   verifyAuth0Token,
   createOrCreateLoginGoogleUser,
   getUserProfile,
+  addProfilePicture
 };
