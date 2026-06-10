@@ -6,6 +6,7 @@ import quizRoutes from "../routes/plantQuiz-routes.js";
 import saleDataRoutes from "../routes/saleData_route.js";
 import userRoutes from "../routes/user-routes.js";
 import chatRoutes from "../routes/chat-routes.js";
+import webhookRoutes from "../routes/webhook_routes.js";  
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -16,7 +17,7 @@ const PORT = process.env.PORT ?? 3000;
 app.use(express.static('public'));
 app.use(cors())
 app.use(express.json());
-
+app.use("/webhooks", webhookRoutes);
 app.use("/", plantRoutes);
 app.use("/", gitfRoutes);
 app.use("/",quizRoutes);

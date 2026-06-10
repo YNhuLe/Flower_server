@@ -1,4 +1,4 @@
-import knexConfig from "../dist/knexfile.js";
+import knexConfig from "../knexfile.js";
 import Knex from "knex";
 import {embed} from "../utils/embed.js";
 import type { Plant ,PlantWithSizes} from "../models/plants.js";
@@ -36,6 +36,11 @@ OriginalPrices: ${plant.sizes.map(size=>size.original_price).join(", ")}
     
 } 
 //trigger embedding single plant by ID when new plant added, plant info updated
+/**
+ * 
+ * @param plantId 
+ * @returns vector of the plant with the given ID, and update the plant record in the database with the new embedding
+ */
 async function embeddedPlantById(plantId:number) {
     const plant  = await knex("plants").where({id:plantId}).first();
     if(!plant){ throw new Error(`Plant with the ID ${plantId} is not exist!`) }
