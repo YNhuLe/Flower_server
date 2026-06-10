@@ -143,20 +143,7 @@ const postChat = async (req: any, res: any): Promise<void> => {
       { role: "user", content: message },
     ];
 
-    //  System prompt with quiz context
-//     const systemPrompt = `
-//       You are a friendly plant advisor.
-
-//       The user's quiz answers: ${JSON.stringify(session.answers)}
-//       Their top 3 recommended plants: ${JSON.stringify(top3)}
-
-   
-//       Rules:
-// - Use get_care_guide for watering, light, soil or care questions
-// - Use check_pet_safety when pets, cats or dogs are mentioned
-// - Use get_plant_page to suggest the product page at the end
-// - Keep replies short, warm and conversational
-//     `;
+    //  System prompt with quiz context and instructions for the agent
 
 const systemPrompt = `
 You are a friendly plant advisor.

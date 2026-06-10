@@ -91,7 +91,8 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
 //get plants base on id
 const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    // const { id } = req.params;
+    const {slug} = req.params;
 
     const data = await knex("plants")
   .select(
@@ -125,7 +126,8 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
       plants.isnewarrival,
       plants.plantinglevel,
       plants.isonsale,
-      plants.benefits
+      plants.benefits,
+      plants.slug
     `),
     knex.raw(`
       jsonb_agg(
@@ -141,7 +143,7 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
     `)
   )
   .leftJoin("plant_sizes", "plants.id", "plant_sizes.plant_id")
-  .where("plants.id", Number(id))
+  .where("plants.slug", slug)
   .groupBy("plants.id")
   .first();
 

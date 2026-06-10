@@ -4,10 +4,23 @@ import type { Request, Response } from "express";
 import type { User } from "../models/users";
 import validator from "validator";
 import { auth } from "express-oauth2-jwt-bearer/dist/index.js";
-
+import cloudinary from "../config/cloudinary.js";
 const knex = initKnex(configuration);
 
-// Controller function to add a new user from Email/Passwword sign up
+/**
+ * Add a new user to the database based on the information provided in the request body.
+ * This function validates the input data, checks for existing users with the same email or phone number, and inserts a new user record into the "users" table if all validations pass.
+ * @param req - Express request object containing user data in the body
+ * @param res - Express response object used to send back the result
+ * @returns {Promise<void>} - Sends a response with the created user or an error message
+ *
+ * @returns {200} If user is successfully created and returned in the response
+ * @returns {400} If required fields are missing, email format is invalid, phone number format is invalid, or if a user with the same email or phone number already exists
+ * @returns {404} If user is not found in the database (not applicable for this function but included for consistency with other functions)
+ * @returns {500} If there is an error during database operations or other unexpected errors
+ * @returns {409} If a user with the same email or phone number already exists in the database
+ */
+
 const addUser = async (req: Request, res: Response): Promise<void> => {
   console.log("addUser req.body:", JSON.stringify(req.body, null, 2));
   const { name, email, phone_number, uid } = req.body;
@@ -39,27 +52,28 @@ const addUser = async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    const existingUser = await knex<User>("users")
+    const existingEmail = await knex<User>("users")
       .where("email", email)
       .first();
-    if (existingUser) {
-      if (existingUser.email === email) {
-        res.status(400).json({
-          message: "User with this email already exists",
-        });
-        return;
-      }
+    if (existingEmail) {
+      res.status(409).json({
+        message: "User with this email already exists",
+      });
+      return;
+    }
 
-      if (existingUser.phone_number === phone_number) {
-        res
-          .status(400)
-          .json({ message: "User with this phone number already exists" });
-      }
+    const existingPhoneNumber = await knex<User>("users")
+      .where("phone_number", phone_number)
+      .first();
+    if (existingPhoneNumber) {
+      res
+        .status(409)
+        .json({ message: "User with this phone number already exists" });
       return;
     }
   } catch (error: any) {
     res
-      .status(400)
+      .status(500)
       .send(`Error checking existing user: ${error.message || error}`);
     return;
   }
@@ -75,48 +89,131 @@ const addUser = async (req: Request, res: Response): Promise<void> => {
       .returning("*");
     res.status(201).json(data[0]);
   } catch (error: any) {
-    res.status(400).send(`Error adding user: ${error.message || error}`);
+    res.status(500).send(`Error adding user: ${error.message || error}`);
   }
 };
 
-//Add profile picture to the user, this is for the case when user sign up using Email/Password
+/**
+ * Checks if the email or phone number provided in the request body already exists in the database.
+ *  If either exists, it returns a 409 Conflict response. If both are unique, it proceeds to create a new user record in the "users" table with the provided information and returns the created user object in the response.
+* @param req - Express request object containing user data in the body
+* @param res - Express response object used to send back the result
+* @returns {Promise<void>} - Sends a response with the created user or an error message
+*
+* @returns {409} If a user with the same email or phone number already exists in the database
+
+*/
+
+const checkFieldsAvailability = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { field, value } = req.query as { field: string; value: string };
+
+  if (!field || !value) {
+    res.status(400).json({ message: "Field and value are required!" });
+    return;
+  }
+
+  const allowedFields = ["email", "phone_number"];
+  if (!allowedFields.includes(field)) {
+    res.status(400).json({
+      message: "Invalid field! Allowed fields are email and phone_number",
+    });
+    return;
+  }
+
+  try {
+    const existing = await knex("users").where(field, value).first();
+    if (existing) {
+      res.status(409).json({ message: `${field} already exists` });
+      return;
+    }
+    res.status(200).json({ message: `${field} is available` });
+  } catch (error: any) {
+    console.error("DB error in checkFieldAvailability:", error);
+    res.status(500).json({
+      message: `Error checking field availability: ${error.message || error}`,
+    });
+  }
+};
+
+/**
+ * Uploads a user's profile picture to Cloudinary and saves the URL to PostgreSQL.
+ *
+ * @route PATCH /users/:auth0Id/avatar
+ * @access Private (requires Auth0 token)
+ *
+ * @param req - Express request object
+ * @param req.params.auth0Id - The user's Auth0 ID from the URL
+ * @param req.file - The image file uploaded via multer (memoryStorage)
+ * @param res - Express response object
+ *
+ * @returns {200} Updated user object with new avatar_url
+ * @returns {400} If no file uploaded or missing required fields
+ * @returns {404} If user not found in database
+ * @returns {500} If Cloudinary upload or database update fails
+ */
 const addProfilePicture = async (req: Request, res: Response) => {
   try {
     const { auth0Id } = req.params;
-    const { avatar_url } = req.body;
-    if (!auth0Id || !avatar_url) {
+
+    //Guard: check file exists and has buffer ( multer memoryStorage) before starting upload stream
+    if (!req.file || !req.file.buffer) {
       return res
         .status(400)
-        .json({ message: "missing required fields: auth0Id, avatar_url" });
+        .json({ message: "No file uploaded or file buffer is empty" });
     }
 
+    const uploadResult = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: "avatars",
+          public_id: auth0Id as string,
+          overwrite: true,
+          resource_type: "image",
+          transformation: [{ width: 200, height: 200, crop: "fill" }],
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        },
+      );
+      stream.end(req.file!.buffer);
+    });
+    const avatar_url = (uploadResult as any).secure_url;
+
+    //update the user's avatar_url in the database
     const user = await knex("users")
-    .where({auth0_id: auth0Id})
-    .update({avatar_url})
-    .returning("*");
-     if (!user || user.length === 0){
+      .where({ auth0_id: auth0Id })
+      .update({ avatar_url })
+      .returning("*");
+    console.log("User found:", user);
+    if (!user || user.length === 0) {
       return res.status(404).json({ message: "User not found" });
-     }
-     res.json(user[0]);
+    }
+    res.json(user[0]);
   } catch (error: any) {
-    return res.status(400).json({
+    return res.status(500).json({
       message: `Error adding profile picture: ${error.message || error}`,
     });
   }
 };
 
-//Verify the token that being sent from the Firebase
-if (!process.env.AUTH0_AUDIENCE) {
-  throw new Error("Missing AUTH0_AUDIENCE in environment variables.");
-}
-
-const verifyAuth0Token = auth({
-  audience: process.env.AUTH0_AUDIENCE,
-  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
-  tokenSigningAlg: "RS256",
-});
-
-// Controller function to add a new user from Google sign up
+/**
+ * Adds a new user to the database or retrieves existing user based on Google sign up information from Auth0 token.
+ * This function extracts user information from the Auth0 token, checks if a user with the same email already exists in the database, and either creates a new user or returns the existing user.
+ *
+ * @route POST /auth/google
+ * @access Private (requires Auth0 token)
+ *
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns {200} Existing user object if user already exists
+ * @returns {201} New user object if user is created
+ * @returns {400} If required user information is missing in token
+ * @returns {500} If database error occurs
+ */
 const createOrCreateLoginGoogleUser = async (req: Request, res: Response) => {
   const auth0User = req.auth as any;
   if (!auth0User) {
@@ -161,27 +258,37 @@ const createOrCreateLoginGoogleUser = async (req: Request, res: Response) => {
   }
 };
 
-//get user
+/**
+ * Get the authenticated user's profile information from the database based on the email or Auth0 ID extracted from the Auth0 token.
+ * This function checks for the presence of the Auth0 token, extracts the user's email and Auth0 ID from the token, and retrieves the corresponding user record from the "users" table in the database.
+ * @param req - Express request object containing the Auth0 token
+ * @param res - Express response object used to send back the result
+ * @returns  - Sends a response with the user profile or an error message
+ *
+ * @returns {200} If user profile is successfully retrieved and returned in the response
+ * @returns {400} If user is not authenticated or if email/Auth0 ID is missing in the token
+ * @returns {404} If user is not found in the database
+ * @returns {500} If there is an error during database operations or other unexpected errors
+ */
 const getUserProfile = async (req: Request, res: Response) => {
   if (!req.auth) {
     return res.status(401).json({ message: "User not authenticated" });
   }
   const decoded = req.auth as any;
   const payload = decoded.payload || decoded;
+
   const email = payload["https://eververdant.com/email"] || payload.email;
   const name = payload["https://eververdant.com/name"] || payload.name;
   const picture = payload["https://eververdant.com/picture"] || payload.picture;
   const auth0_id = payload.sub;
-  console.log("Decoded token in getUserProfile: ", email, name, payload);
   if (!email || !auth0_id) {
     return res
       .status(400)
       .json({ message: "Email or Auth0 ID not found in token" });
   }
   try {
-    const user = await knex("users")
-      .where(email ? { email } : { auth0_id })
-      .first();
+    console.log("Searching for user with email:", email);
+    const user = await knex("users").where("email", email).first();
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -191,10 +298,11 @@ const getUserProfile = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Database error", error: error });
   }
 };
+
 export {
   addUser,
-  verifyAuth0Token,
   createOrCreateLoginGoogleUser,
   getUserProfile,
-  addProfilePicture
+  addProfilePicture,
+  checkFieldsAvailability,
 };

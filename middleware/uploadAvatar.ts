@@ -1,5 +1,4 @@
 import multer from "multer";
-import cloudinary from "../config/cloudinary.js";
 
 /**
  * Multer configuration for handling avatar uploads. It uses memory storage and limits file size to 5MB.
@@ -7,7 +6,7 @@ import cloudinary from "../config/cloudinary.js";
  * The uploaded file will be processed in the controller, where it will be uploaded to Cloudinary and the user's profile will be updated with the new avatar URL.
  * 
  */
-const storage =  multer({
+const uploadAvatar =  multer({
 storage:multer.memoryStorage(),
 limits: { fileSize: 5 * 1024 *1024},
 fileFilter: (req, file, cb) =>{
@@ -18,8 +17,6 @@ fileFilter: (req, file, cb) =>{
         cb(new Error("Invalid file type"));
     }
 }
-
-
 });
     
-export default storage;
+export default uploadAvatar;
