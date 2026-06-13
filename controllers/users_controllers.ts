@@ -164,12 +164,13 @@ const addProfilePicture = async (req: Request, res: Response) => {
         .status(400)
         .json({ message: "No file uploaded or file buffer is empty" });
     }
+    const sanitizedPublicId = (auth0Id as string).replace(/[|@#?&]/g, "_");
 
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: "avatars",
-          public_id: auth0Id as string,
+          public_id: sanitizedPublicId,
           overwrite: true,
           resource_type: "image",
           transformation: [{ width: 200, height: 200, crop: "fill" }],
@@ -183,6 +184,12 @@ const addProfilePicture = async (req: Request, res: Response) => {
     });
     const avatar_url = (uploadResult as any).secure_url;
 
+    if (!avatar_url) {
+      return res
+        .status(500)
+        .json({ message: "Failed to upload image to the cloud storage." });
+    }
+
     //update the user's avatar_url in the database
     const user = await knex("users")
       .where({ auth0_id: auth0Id })
@@ -194,12 +201,73 @@ const addProfilePicture = async (req: Request, res: Response) => {
     }
     res.json(user[0]);
   } catch (error: any) {
+    console.error("addProfilePicture error:", error);
     return res.status(500).json({
       message: `Error adding profile picture: ${error.message || error}`,
     });
   }
 };
 
+/**
+ * Updates the user's profile information.
+ *
+ * @route PATCH /users/me
+ * @access Private (requires Auth0 token)
+ *
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns {200} Updated user object
+ * @returns {400} If required user information is missing
+ * @returns {500} If database error occurs
+ */
+const updateUserProfile = async (req: Request, res: Response) => {
+  if (!req.auth) {
+    return res.status(401).json({ message: "User not authenticated" });
+  }
+
+  const decoded = req.auth as any;
+  const payload = decoded.payload || decoded;
+  const auth0Id = payload.sub;
+
+  const { name, phone_number } = req.body;
+
+  if (!name || !phone_number) {
+    return res
+      .status(400)
+      .json({ message: "Name and phone number are required" });
+  }
+
+  if (phone_number) {
+    if (typeof phone_number !== "string") {
+      return res
+        .status(400)
+        .json({ message: "Phone number should be a string!" });
+    }
+    const phoneRegex = /^\(\d{3}\) \d{3}-\d{4}$/;
+    if (!phoneRegex.test(phone_number)) {
+      return res
+        .status(400)
+        .json({ message: "Phone number must be in format: (000) 000-0000" });
+    }
+  }
+
+  try {
+    const updatedUser = await knex("users")
+      .where({ auth0_id: auth0Id })
+      .update({ name, phone_number })
+      .returning("*");
+
+    if (!updatedUser || updatedUser.length === 0) {
+      return res.status(404).json({ message: "User not found." });
+    }
+    return res.status(200).json(updatedUser[0]);
+  } catch (error: any) {
+    console.error("updateUserProfile error:", error);
+    return res
+      .status(500)
+      .json({ message: `Error updating profile: ${error.message || error}` });
+  }
+};
 /**
  * Adds a new user to the database or retrieves existing user based on Google sign up information from Auth0 token.
  * This function extracts user information from the Auth0 token, checks if a user with the same email already exists in the database, and either creates a new user or returns the existing user.
@@ -304,5 +372,6 @@ export {
   createOrCreateLoginGoogleUser,
   getUserProfile,
   addProfilePicture,
+  updateUserProfile,
   checkFieldsAvailability,
 };
