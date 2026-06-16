@@ -16,6 +16,7 @@ router.get("/users/check-existing", userControllers.checkFieldsAvailability);
 //router.patch('/users/profile/:auth0Id/avatar', verifyAuth0Token, userControllers.addProfilePicture);
 //route for user profile ( read-only)
 router.route("/users/me").get(verifyAuth0Token, userControllers.getUserProfile);
+router.patch("/users/me", verifyAuth0Token, userControllers.updateUserProfile);
 //route for editing user profile
 router.patch("/users/profile/:auth0Id/avatar", verifyAuth0Token, uploadAvatar.single('avatar'),userControllers.addProfilePicture);
 export default router;
