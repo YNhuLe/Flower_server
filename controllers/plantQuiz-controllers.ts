@@ -4,11 +4,21 @@ import type { Request, Response } from "express";
 import generateRecommendation from "../services/gemini.js";
 import type { QuizAnswer, AIRecommendation } from "../models/plant-quiz.js";
 import { embed } from "../utils/embed.js";
-import type { Plant, PlantWithSizes } from "models/plants.js";
+import type { Plant, PlantWithSizes } from "../models/plants.js";
 
 const knex = initKnex(configuration);
 
-//get the quiz questions and options
+/***
+ * Controller to get quiz questions and options from the database, format them into a structured JSON object, and send it as a response to the client.
+ * The function performs the following steps:
+ * 1. Executes a raw SQL query to fetch quiz questions along with their associated options, ordered by display order.
+ * 2. Initializes an empty object `formatted` to store the structured quiz data.
+ * 3. Iterates through each row of the query result:
+ *    - If the question ID does not already exist in `formatted`, it creates a new entry for that question with its details and an empty options array.
+ *    - If the current row contains an option value, it appends that option to the corresponding question's options array.
+ * 4. Finally, it sends the structured quiz data as a JSON response with a 200 status code. If any error occurs during this process, it catches the error and sends a 500 status code with an error message.
+ *
+ */
 const getQuizQuestionOptions = async (
   req: Request,
   res: Response,
@@ -51,7 +61,7 @@ const getQuizQuestionOptions = async (
     res.status(200).json(formatted);
   } catch (error: any) {
     res
-      .status(400)
+      .status(500)
       .send(
         `Error fetching quiz question and options from tables ${error.message}`,
       );
@@ -93,12 +103,6 @@ const postQuizPlantRecommendations = async (
     }
     const quizSummary = builtQuizSummary(answers);
     const quizEmbedding = await embed(quizSummary);
-    // console.log("quizEmbedding:", quizEmbedding, typeof quizEmbedding);
-
-    // if (!req.body || !req.body.answers) {
-    //   res.status(400).json({ error: "Missing answers in request body" });
-    //   return;
-    // }
     function toPgVector(arr: number[]) {
       return `[${arr.join(",")}]`;
     }
@@ -187,7 +191,6 @@ Output format example (structure only, not content):
         top3_plant_ids: mergeRecommendations.map((p: any) => p.id),
       })
       .returning("*");
-    console.log("inserted the data");
     res.status(200).json({
       session_id: session.id,
       recommendations: mergeRecommendations,
@@ -195,7 +198,7 @@ Output format example (structure only, not content):
   } catch (err: any) {
     console.error("Gemini error:", err);
     res
-      .status(400)
+      .status(500)
       .send(`Error sending the user's input into the server! ${err.message}`);
   }
 };
