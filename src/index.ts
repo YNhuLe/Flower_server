@@ -7,6 +7,7 @@ import saleDataRoutes from "../routes/saleData_route.js";
 import userRoutes from "../routes/user-routes.js";
 import chatRoutes from "../routes/chat-routes.js";
 import webhookRoutes from "../routes/webhook_routes.js";  
+import feedbackRoutes from "../routes/feedbackRoutes.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use("/",quizRoutes);
 app.use("/", chatRoutes);
 app.use("/", saleDataRoutes);
 app.use("/", userRoutes);
+app.use("/", feedbackRoutes);
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });

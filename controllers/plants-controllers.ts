@@ -3,7 +3,10 @@ import configuration from "../knexfile.js";
 import type { Request, Response } from "express";
 import type { Plant, PlantSize, PlantWithSizes } from "../models/plants";
 const knex = initKnex(configuration);
-//get all plants
+/***
+ * @returns {Promise<void>} - A promise that resolves when the function completes its execution.
+ * The function sends a JSON response containing all plants from the database or an error message if the operation fails.
+ **/
 const getAllPlants = async (req: Request, res: Response): Promise<void> => {
   try {
     const data = await knex("plants")
@@ -88,7 +91,13 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-//get plants base on id
+/**
+ * a function to get a single plant by its slug from the database, contains all the plant information
+ * @param req 
+ * @param res 
+ * @returns {Promise<void>} - A promise that resolves when the function completes its execution.
+ * The function sends a JSON response containing the plant information or an error message if the operation fails.
+ */
 const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
   try {
     // const { id } = req.params;
