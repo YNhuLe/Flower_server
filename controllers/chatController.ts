@@ -39,7 +39,12 @@ const tools = [
   },
 ];
 
-//tools axecutor function definition
+/**
+ * Execute a tool call based on its name and input.
+ *
+ * @param call - The tool call object containing name, input, and id.
+ * @returns The result of the tool execution.
+ */
 const executeTool = async (call: any) => {
   let result;
   switch (call.name) {
@@ -79,6 +84,27 @@ const executeTool = async (call: any) => {
   };
 };
 
+/**/
+const createChatSession = async (req: any, res: any): Promise<void> => {
+  try {
+    const { user_id, quiz_sessions_id } = req.body;
+    if (!user_id || !quiz_sessions_id) {
+      return res
+        .status(400)
+        .json({ error: "user_id , quiz_session_id are required" });
+    }
+
+    const [chatSession] = await knex("chat_sessions")
+      .insert({ user_id, quiz_sessions_id, title: "Plant chat" })
+      .returning("*");
+
+    res.status(201).json(chatSession);
+  } catch (serror: any) {
+    console.error("Error creating chat session:", serror);
+    res.status(500).json({ error: serror.message });
+  }
+};
+
 // ─── Main chat endpoint ───────────────────────────────────────────────────────
 /**
  * Handle a chat request with the AI plant advisor.
@@ -116,12 +142,21 @@ const postChat = async (req: any, res: any): Promise<void> => {
     const { session_id, message } = req.body;
 
     //fetch the quiz session data to provide context to the agent
-    const session = await knex("quiz_sessions")
+    const chatSession = await knex("chat_sessions")
       .where({ id: session_id })
       .first();
 
-    if (!session) {
+    if (!chatSession) {
       res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    const session = await knex("quiz_sessions")
+      .where({ id: chatSession.quiz_sessions_id })
+      .first();
+
+    if (!session) {
+      res.status(404).json({ error: "Quiz session not found" });
       return;
     }
 
@@ -144,7 +179,6 @@ const postChat = async (req: any, res: any): Promise<void> => {
     ];
 
     //  System prompt with quiz context and instructions for the agent
-
 const systemPrompt = `
 You are a friendly plant advisor.
 
@@ -157,7 +191,15 @@ Rules:
 - Use get_plant_page to suggest the product page at the end
 - Keep replies short, warm and conversational
 
-When showing care information, always format it like this:
+- If the user asks about ONE specific topic (e.g. just watering, just light, just humidity),
+  answer ONLY that topic in 1-2 short sentences. Do NOT show the full care guide format below —
+  just give a brief, friendly, focused tip using the relevant emoji, e.g.:
+  💧 Water it once the top inch of soil feels dry — usually every 7-10 days.
+
+- Only use the FULL "Complete Care Guide" format below if the user asks for a full/complete
+  care guide, or asks a broad question like "how do I take care of this plant".
+
+When showing a full care guide, format it like this:
 **Complete Care Guide for [Plant Name]:**
 💧 **Watering:** [watering info]
 ☀️ **Light:** [light info]
@@ -171,7 +213,7 @@ For pet safety, format it like this:
 ⚠️ **Pet Safety:** [plant name] is toxic to [cats/dogs] — [toxicity notes]
 
 For product page suggestions, format it like this:
-🛒 **View [Plant Name]:** [page_url]
+🛒 🛒 [View {Plant Name}]({page_url})
 `;
 
     //AGENT LOOP and pick out tools
@@ -214,10 +256,11 @@ For product page suggestions, format it like this:
       });
     }
   } catch (err: any) {
-    res.status(500).json({
-      error: "Chat error full details:",
-      details: err.response?.data || err.message || err,
-    });
+    console.error(
+      "Chat error full details:",
+      err.response?.data || err.message || err,
+    );
+
     res.status(500).json({
       error:
         err.response?.data?.error?.message || err.message || "Unknown error",
@@ -243,19 +286,21 @@ For product page suggestions, format it like this:
 const getChatHistory = async (req: any, res: any) => {
   try {
     const { user_id } = req.params;
-    const session = await knex('quiz_sessions')
+    const session = await knex("quiz_sessions")
       .where({ user_id })
-      .orderBy("created_at", "desc").first();
+      .orderBy("created_at", "desc")
+      .first();
 
-      if(!session){
-        return res.status(404).json({error: "No session found for this user"});
-      }
-const history = await knex('chat_history')
-.where("session_id", session.id)
-.orderBy('created_at', 'asc').select('role', 'message', 'created_at');
-    res.status(200).json({ history , session_id: session.id });
+    if (!session) {
+      return res.status(404).json({ error: "No session found for this user" });
+    }
+    const history = await knex("chat_history")
+      .where("session_id", session.id)
+      .orderBy("created_at", "asc")
+      .select("role", "message", "created_at");
+    res.status(200).json({ history, session_id: session.id });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to retrieve chat history" });
   }
 };
-export { postChat, getChatHistory };
+export { postChat, getChatHistory, createChatSession };
