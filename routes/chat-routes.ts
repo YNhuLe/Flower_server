@@ -7,4 +7,5 @@ router.route("/chat").post(chatControllers.postChat);
 router.route("/session/:session_id").get(sessionController.getSessionById);
 router.route('/chat/:user_id/history').get(chatControllers.getChatHistory)
 router.route("/session/user/:user_id").get(sessionController.getSessionByUserId);
+router.route("/chat-sessions").post(chatControllers.createChatSession);
 export default router;
