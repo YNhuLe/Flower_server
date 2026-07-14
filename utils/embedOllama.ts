@@ -1,21 +1,19 @@
+import axios from "axios";
+
 async function embedWithOllama(text: string): Promise<number[]> {
-  const response = await fetch("http://localhost:11434/api/embed", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "nomic-embed-text", input: text }),
+  const baseURL = process.env.OLLAMA_API_URL || "http://localhost:11434";
+  const response = await axios.post(`${baseURL}/api/embed`, {
+    model: "nomic-embed-text",
+    input: text,
   });
 
-  if (!response.ok) {
-    throw new Error(`Ollama request failed: ${response.status}`);
-  }
+  const data = response.data;
 
-  const data = await response.json();
-
-  if (!data?.embedding) {
+  if (!data?.embeddings?.[0]) {
     throw new Error("Invalid embedding response from Ollama");
   }
 
-  return data.embedding;
+  return data.embeddings[0];
 }
 
 export { embedWithOllama };
