@@ -34,9 +34,10 @@ function rrfMerge(
 }
 
 const getSearchResults = async (req: Request, res: Response): Promise<void> => {
+
   const {
     q,
-    limit = "20",
+    limit = "5",
     inStock,
     category,
     petfriendly,
@@ -49,7 +50,7 @@ const getSearchResults = async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: "Missing or invalid query parameter 'q'" });
     return;
   }
-console.log("Search query:", q);
+
   try {
     const [keywordRows, queryEmbedding] = await Promise.all([
       knex.raw(
@@ -64,21 +65,29 @@ console.log("Search query:", q);
       ),
       embed(q),
     ]);
-
+    // console.log("q:", q);
+    // console.log("embedding first 5 dims:", queryEmbedding.slice(0, 5));
+    const vectorString = `[${queryEmbedding.join(",")}]`;
+    // console.log("vectorString first 30 chars:", vectorString.slice(0, 30));
+    const isAquaticQuery = /aquat|pomd|aquarium|underwater|fish tank/i.test(q);
+    if (isAquaticQuery) {
+      console.log("Aquatic query detected, filtering for aquatic plants.");
+    }
     const vectorRows = await knex.raw(
       `
-        SELECT id,
+        SELECT id, common_name,
         search_embedding <=> ?::vector AS distance
         FROM plants 
+     ${!isAquaticQuery ? "WHERE category_id != 6" : ""}
         ORDER BY distance ASC
-        LIMIT 50
-        `,
-      [JSON.stringify(queryEmbedding)],
+        LIMIT 10`,
+      [vectorString],
     );
 
     const keywordIds = keywordRows.rows.map((row: any) => row.id);
     const vectorIds = vectorRows.rows.map((row: any) => row.id);
     const mergedIds = rrfMerge(keywordIds, vectorIds, 60, Number(limit));
+
     if (mergedIds.length === 0) {
       res.status(200).json({ query: q, results: [] });
       return;
@@ -109,7 +118,7 @@ console.log("Search query:", q);
       query = query
         .join("plant_sizes", "plants.id", "plant_sizes.plant_id")
         .andWhere("plant_sizes.price", "<=", Number(maxPrice))
-        .distinct("plants.id");
+        .groupBy("plants.id");
 
     const plants = await query;
     const plantMap = Object.fromEntries(
