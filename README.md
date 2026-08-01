@@ -466,11 +466,255 @@ function rrfMerge(keywordResults, vectorResults, k = 60, topN = 20) {
 
 ---
 
-<a id="advanced-ai-recommendations"></a>
 
-## 🪴 3. Advanced AI Recommendations
+## 🪴 3. Advanced AI Recommendations — Meet Your Plantmate 🌿
 
-🚧 *Documentation coming soon — this section will cover how the Anthropic API layer builds on the Gemini-powered quiz matching to give deeper, conversational plant care guidance.*
+Quiz in, perfect plants out — then a chat buddy to help them thrive. 🌱💬
+
+### 📑 Table of Contents
+- [The Big Picture](#-the-big-picture)
+- [Step 1: Quiz Scoring (Vector Search + LLM Re-Rank)](#-step-1-quiz-scoring-vector-search--llm-re-rank)
+- [Recommendation Score: Measuring Quiz Match Quality](#-recommendation-score-measuring-quiz-match-quality)
+- [Step 2: Meet Plantmate (Tool-Calling Agent)](#-step-2-meet-plantmate-tool-calling-agent)
+- [API](#-api-1)
+- [Chat Score: Measuring Chat Quality](#-chat-score-measuring-chat-quality)
+- [Why Different Tools for Different Jobs?](#-why-different-tools-for-different-jobs)
+- [Setup Checklist](#-setup-checklist)
+- [Known Limitations](#-known-limitations)
+- [Changelog](#-changelog-2)
+
+---
+
+### 🌟 The Big Picture
+
+```
+🧑 User finishes quiz
+        │
+        ▼
+🧮 Vector search → top 5 candidate plants
+        │
+        ▼
+🤖 Gemini re-ranks → final top 3 + reasoning
+        │
+        ▼
+👍👎 User rates each recommendation
+        │
+        ▼
+💬 Chat with Plantmate about the picks (Claude + tools)
+        │
+        ▼
+👍👎 User rates each chat reply
+```
+
+Two separate feedback loops here — one on the **recommendations**, one on the **chat** — because they're rating different things and need different fixes when something's off. 🔀
+
+---
+
+### 🧮 Step 1: Quiz Scoring (Vector Search + LLM Re-Rank)
+
+This is a **retrieve, then re-rank** pattern — vector search casts a wide net, and an LLM makes the final, explainable call.
+
+1. **Summarize the quiz** — `builtQuizSummary()` turns the raw answers (sunlight, temperature, humidity, care level, plant type, things to avoid) into a single natural-language paragraph.
+2. **Embed it once** — that whole summary becomes one embedding vector, not three separate attribute comparisons.
+3. **Vector search for a shortlist** — compared against each plant's `plant_embedding` using `<->` (Euclidean distance), pulling the **top 5 closest candidates**. This is a shortlist, not the final answer.
+4. **Gemini picks the final 3** — the 5 candidates get handed to Gemini, which selects the best 3, and writes a `benefit` line, a `scoreMatch`, and 3 short `reasoning` bullets for each — in the user's language, not just a number.
+5. **Merge & save** — the picks get merged with full plant rows + size options, then saved to `quiz_sessions.top3_plant_ids` for later use in the chat flow.
+
+<details>
+<summary>📜 Click to see the vector search query</summary>
+
+```js
+const quizSummary = builtQuizSummary(answers);
+const quizEmbedding = await embed(quizSummary);
+
+const vectorMatches = await knex.raw(
+  `SELECT *, (plant_embedding <-> (?::vector)) AS distance
+   FROM plants
+   ORDER BY distance ASC
+   LIMIT 5`,
+  [toPgVector(quizEmbedding)]
+);
+```
+
+> Note: this uses `<->` (Euclidean/L2 distance) rather than `<=>` (cosine distance). Both work fine for ranking purposes here, but cosine is generally the more common choice for text embeddings since it ignores vector magnitude.
+
+</details>
+
+<details>
+<summary>💻 Click to see the Gemini re-ranking prompt</summary>
+
+```js
+const prompt = `
+You are a plant recommendation engine.
+
+User preferences:
+${JSON.stringify(answers, null, 2)}
+
+Candidate plants (already pre-filtered and sorted by vector similarity):
+${JSON.stringify(vectorMatches.rows, null, 2)}
+
+From the candidate list, select the top 3 plants that best match the user's
+preferences. Return valid JSON array only — plant, benefit, scoreMatch (0-1),
+and 3 short reasoning bullets per plant.
+`;
+
+const recommendations = await generateRecommendation(prompt);
+```
+
+</details>
+
+---
+
+### 📊 Recommendation Score: Measuring Quiz Match Quality
+
+Each of the 3 recommended plants gets its own 👍/👎 — someone might love pick #1 and dislike pick #3, so feedback is **per-plant**, not one rating for the whole batch.
+
+**Schema:**
+
+```sql
+CREATE TABLE recommendation_feedback (
+  id SERIAL PRIMARY KEY,
+  session_id INTEGER REFERENCES quiz_sessions(id),
+  plant_id INTEGER REFERENCES plants(id),
+  feedback SMALLINT,  -- 1 = 👍, -1 = 👎
+  created_at TIMESTAMP DEFAULT now()
+);
+```
+
+<details>
+<summary>💻 Click to see the feedback endpoint</summary>
+
+```js
+const postRecommendationFeedback = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { session_id, plant_id, feedback } = req.body;
+    await knex("recommendation_feedback").insert({ session_id, plant_id, feedback });
+    res.status(200).json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to save recommendation feedback" });
+  }
+};
+```
+
+</details>
+
+**Why this matters long-term:** this data lets you eventually check whether vector-search-shortlisted plants that Gemini picked actually land well with users — and if a pattern shows up (e.g. plants matched mainly on `temperature` consistently get 👎), that's a concrete signal about where the embedding or prompt needs tuning, instead of guessing. 📈
+
+---
+
+### 💬 Step 2: Meet Plantmate (Tool-Calling Agent)
+
+Once a user has their top 3, they can chat with **Plantmate** — an agent that calls tools on demand rather than carrying a full plant profile in every prompt.
+
+| Tool | What it fetches | When Claude calls it |
+|---|---|---|
+| `get_care_guide` | Watering, light, soil, humidity, temperature, fertilizer info | Care/maintenance questions |
+| `check_pet_safety` | `is_pet_friendly`, `toxicity_notes` | Questions mentioning pets, cats, or dogs |
+| `get_plant_page` | `page_url`, `common_name` | Wrapping up with a product link |
+
+<details>
+<summary>💻 Click to see the agent loop</summary>
+
+```js
+let response = await callClaude(systemPrompt, messages, tools);
+
+while (response.stop_reason === "tool_use") {
+  const toolCalls = response.content.filter((c: any) => c.type === "tool_use");
+  const toolResults = await Promise.all(toolCalls.map(executeTool));
+
+  messages.push({ role: "assistant", content: response.content });
+  messages.push({ role: "user", content: toolResults });
+
+  response = await callClaude(systemPrompt, messages, tools);
+}
+```
+
+</details>
+
+---
+
+### 🔌 API
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/quiz/recommend` | Embeds quiz answers, vector-searches top 5, Gemini re-ranks to top 3, saves session |
+| `POST /api/recommendation/feedback` | Records 👍/👎 on a specific recommended plant |
+| `POST /api/chat` | Runs the Plantmate agent loop, returns a reply |
+| `GET /chat/:user_id/history` | Returns chat history for a user's most recent session |
+| `POST /api/chat/:id/feedback` | Records 👍/👎 on a specific chat reply |
+
+---
+
+### 📊 Chat Score: Measuring Chat Quality
+
+Separate from recommendation feedback — this rates Plantmate's chat replies, tracked with the same 👍/👎 pattern.
+
+**Schema:**
+
+```sql
+ALTER TABLE chat_history ADD COLUMN feedback SMALLINT;  -- 1 = 👍, -1 = 👎
+ALTER TABLE chat_history ADD COLUMN tool_calls TEXT;     -- JSON array of tools used per reply
+```
+
+`tool_calls` is logged on every reply so usage patterns and tool-accuracy checks can be built later without re-instrumenting anything.
+
+<details>
+<summary>📜 Click to see the satisfaction-rate query</summary>
+
+```sql
+SELECT
+  COUNT(*) FILTER (WHERE feedback = 1) AS thumbs_up,
+  COUNT(*) FILTER (WHERE feedback = -1) AS thumbs_down,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE feedback = 1)
+    / NULLIF(COUNT(*) FILTER (WHERE feedback IS NOT NULL), 0), 1) AS satisfaction_rate
+FROM chat_history
+WHERE role = 'assistant';
+```
+
+</details>
+
+---
+
+### 🤔 Why Different Tools for Different Jobs?
+
+| Task | Best tool | Why |
+|---|---|---|
+| 🔍 Shortlisting candidates from the whole catalog | Vector search (`plant_embedding`) | Fast, cheap, scales to thousands of plants |
+| 🏆 Picking the best 3 + explaining why | Gemini | Needs judgment and natural-language reasoning a similarity score can't produce |
+| 💬 Answering open-ended care questions | Claude (Anthropic API) + tools | Needs fresh data lookups and flexible conversation, not a one-shot ranking |
+
+---
+
+### ⚙️ Setup Checklist
+
+- [ ] ☑️ Build the quiz UI in React, capturing sunlight/temperature/humidity/care preferences
+- [ ] ☑️ Embed the quiz summary, vector-search top 5, Gemini re-rank to top 3
+- [ ] ☑️ Add `recommendation_feedback` table + endpoint, 👍/👎 buttons on each result card
+- [ ] ☑️ Add `ANTHROPIC_API_KEY` to `.env`
+- [ ] ☑️ Wire up `get_care_guide`, `check_pet_safety`, `get_plant_page` tools
+- [ ] ☑️ Add `feedback` + `tool_calls` columns to `chat_history`, plus 👍/👎 under each Plantmate reply
+
+---
+
+### ⚠️ Known Limitations
+
+- 🐛 If Gemini returns a plant name that doesn't exactly match a candidate, that pick is silently dropped — `top3_plant_ids` could end up with fewer than 3 plants
+- 🔢 Error responses currently return `400` for what are really server-side failures (DB/Gemini/JSON-parse errors) — should be `500`
+- 💭 No long-term memory across chat sessions — each new session starts fresh
+- ⏳ No streaming chat responses yet — the full reply comes back at once
+- 👍👎 Both feedback signals are binary — they tell you *that* something missed, not *why*
+
+---
+
+### 📝 Changelog
+
+| Date | Change | Notes |
+|---|---|---|
+| 2026-06-20 | 🎉 Initial Plantmate feature documented | Quiz-to-score-to-top-3 pipeline + Anthropic-powered chat |
+| 2026-06-20 | 🔧 Updated chat section to reflect real tool-calling agent | Replaced speculative static-context design with the actual `get_care_guide` / `check_pet_safety` / `get_plant_page` tool loop |
+| 2026-06-20 | 📊 Added chat score (👍/👎 feedback) | New `feedback` + `tool_calls` columns, feedback endpoint, satisfaction-rate query |
+| 2026-06-20 | 🔧 Corrected quiz scoring to reflect real vector search + Gemini re-rank flow | Replaced incorrect 3-attribute weighted scoring with the actual single `plant_embedding` + Gemini re-rank pipeline |
+| 2026-06-20 | 📊 Added recommendation score (👍/👎 per quiz pick) | New `recommendation_feedback` table + endpoint, separate from chat feedback |
 
 ---
 
