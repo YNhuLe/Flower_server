@@ -1,16 +1,19 @@
 import initKnex from "knex";
 import configuration from "../knexfile.js";
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import type { Plant, PlantSize, PlantWithSizes } from "../models/plants";
 const knex = initKnex(configuration);
 /***
  * @returns {Promise<void>} - A promise that resolves when the function completes its execution.
  * The function sends a JSON response containing all plants from the database or an error message if the operation fails.
  **/
-const getAllPlants = async (req: Request, res: Response): Promise<void> => {
+const getAllPlants = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const data = await knex("plants")
-      // .join("plant_sizes", "plants.id", "plant_sizes.plant_id")
       .select(
         "plants.*",
 
@@ -27,8 +30,8 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
             'discounted_price', plant_sizes.original_price * (1 - plant_sizes.discount_percentage/100.0)
           )
         ) AS sizes
-          `
-        )
+          `,
+        ),
       )
       .join("plant_sizes", "plants.id", "plant_sizes.plant_id")
       .groupBy("plants.id")
@@ -45,7 +48,7 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
           // console.log(`Error parsing benefits for plant ${plant.id} : `, error);
           console.error(
             `Error parsing benefits for plant  $ { plant . id }  : `,
-            error
+            error,
           );
           parsedBenefits = ["Error reading benefits!"];
         }
@@ -69,43 +72,32 @@ const getAllPlants = async (req: Request, res: Response): Promise<void> => {
       } as PlantWithSizes;
     });
 
-    // Log all debugging info BEFORE sending response
-    console.log("getAllPlants - Total plants retrieved:", plants.length);
-    console.log("getAllPlants - Testing console output");
-
-    // if (plants.length > 0) {
-    //   console.log(
-    //     "getAllPlants - First Plant Data (Check Sizes & Prices):",
-    //     JSON.stringify(plants[0]?.sizes, null, 2)
-    //   );
-    //   console.log(
-    //     "getAllPlants - Full first plant:",
-    //     JSON.stringify(plants[0], null, 2)
-    //   );
-    // }
-
-    // Send response AFTER all logging
     res.status(200).json(plants);
   } catch (error: any) {
     res.status(400).send(`Error retrieving plants: ${error.message}`);
   }
+  next();
 };
 
 /**
  * a function to get a single plant by its slug from the database, contains all the plant information
- * @param req 
- * @param res 
+ * @param req
+ * @param res
  * @returns {Promise<void>} - A promise that resolves when the function completes its execution.
  * The function sends a JSON response containing the plant information or an error message if the operation fails.
  */
-const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
+const getSinglePlant = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     // const { id } = req.params;
-    const {slug} = req.params;
+    const { slug } = req.params;
 
     const data = await knex("plants")
-  .select(
-    knex.raw(`
+      .select(
+        knex.raw(`
       plants.id,
       plants.category_id,
       plants.common_name,
@@ -138,7 +130,7 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
       plants.benefits,
       plants.slug
     `),
-    knex.raw(`
+        knex.raw(`
       jsonb_agg(
         jsonb_build_object(
           'size_id', plant_sizes.size_id,
@@ -149,13 +141,12 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
           'discounted_price', plant_sizes.original_price * (1 - plant_sizes.discount_percentage / 100.0)
         )
       ) AS sizes
-    `)
-  )
-  .leftJoin("plant_sizes", "plants.id", "plant_sizes.plant_id")
-  .where("plants.slug", slug)
-  .groupBy("plants.id")
-  .first();
-
+    `),
+      )
+      .leftJoin("plant_sizes", "plants.id", "plant_sizes.plant_id")
+      .where("plants.slug", slug)
+      .groupBy("plants.id")
+      .first();
 
     if (!data) {
       res.status(404).send("Plant not found.");
@@ -164,39 +155,25 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
 
     // Parse benefits if it's a string
     let parsedBenefits: string[] = [];
-    if (typeof data.benefits === 'string' && data.benefits) {
+    if (typeof data.benefits === "string" && data.benefits) {
       try {
-        const cleanBenefits = data.benefits.replace(/[\n\r]/g, '');
+        const cleanBenefits = data.benefits.replace(/[\n\r]/g, "");
         parsedBenefits = JSON.parse(cleanBenefits);
       } catch (error: any) {
         console.error(`Error parsing benefits for plant ${data.id}:`, error);
-        parsedBenefits = ['Error reading benefits!'];
+        parsedBenefits = ["Error reading benefits!"];
       }
     }
 
     // Convert numeric fields
     const cleanedSizes = (data.sizes || [])
-    .filter((s: any) => s !== null
-)
-    .map((size: any) => ({
-      ...size,
-      original_price: Number(size.original_price),
-      discount_percentage: Number(size.discount_percentage),
-      discounted_price: Number(size.discounted_price)
-    }));
-
-    // const normalised = {
-    //   ...data, 
-    //   id: data.id,
-    //   plant_id:data.id, 
-    //   category_id : data.category_id,
-    //   categoryId : data.category_id,
-    //   benefits: parsedBenefits,
-    //   sizes: cleanedSizes,
-    //   rating: Number(data.rating),
-    //   num_reviews: Number(data.num_reviews),
-    //   stock_quantity: Number(data.stock_quantity)
-    // };
+      .filter((s: any) => s !== null)
+      .map((size: any) => ({
+        ...size,
+        original_price: Number(size.original_price),
+        discount_percentage: Number(size.discount_percentage),
+        discounted_price: Number(size.discounted_price),
+      }));
 
     const normalised = {
       ...data,
@@ -206,17 +183,22 @@ const getSinglePlant = async (req: Request, res: Response): Promise<void> => {
       sizes: cleanedSizes,
       rating: Number(data.rating),
       num_reviews: Number(data.num_reviews),
-      stock_quantity: Number(data.stock_quantity)
+      stock_quantity: Number(data.stock_quantity),
     };
 
     res.status(200).json(normalised);
   } catch (error: any) {
     res.status(400).send(`Error retrieving plants: ${error.message || error}`);
   }
+  next();
 };
 
 //get plant info and their category==========================
-const getPlantCate = async (req: Request, res: Response): Promise<void> => {
+const getPlantCate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const plantCategory = await knex("plants")
       .join("categories", "categories.id", "plants.category_id")
@@ -236,10 +218,15 @@ const getPlantCate = async (req: Request, res: Response): Promise<void> => {
   } catch (error: any) {
     res.status(400).send(`Error retrieving plant and their category!`);
   }
+  next();
 };
 
 //get list of plants base on category============================
-const getPlantList = async (req: Request, res: Response): Promise<void> => {
+const getPlantList = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const { id } = req.params;
     const plantList = await knex("plants")
@@ -262,10 +249,15 @@ const getPlantList = async (req: Request, res: Response): Promise<void> => {
       .status(400)
       .send(`Error fetching plants base on category ${error.message || error}`);
   }
+  next();
 };
 
 //get all the giftboxes===========================
-const getGiftBox = async (req: Request, res: Response): Promise<void> => {
+const getGiftBox = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const result = await knex.raw(
       `
@@ -292,9 +284,9 @@ const getGiftBox = async (req: Request, res: Response): Promise<void> => {
       GROUP BY 
         g.id, g.title, g.subtitle, g.img_url, g.discount, g.price, 
         g.ori_price, g.is_featured, g.created_at, g.updated_at;
-      `
+      `,
     );
-    // console.log("Result: ", result);
+
     const giftbox = result?.rows;
 
     if (!giftbox) {
@@ -309,11 +301,16 @@ const getGiftBox = async (req: Request, res: Response): Promise<void> => {
   } catch (err: any) {
     res.status(500).send(`Error fetching giftboxes ${err.message || err}`);
   }
+  next();
 };
 
 //get giftbox base on the Id==========================
 
-const getGiftBoxById = async (req: Request, res: Response): Promise<void> => {
+const getGiftBoxById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const { boxId } = req.params;
 
@@ -344,7 +341,7 @@ const getGiftBoxById = async (req: Request, res: Response): Promise<void> => {
         g.id, g.title, g.subtitle, g.img_url, g.discount, g.price, 
         g.ori_price, g.is_featured, g.created_at, g.updated_at;
       `,
-      [boxId]
+      [boxId],
     );
     // console.log("Result: ", result);
     const giftbox = result?.rows?.[0];
@@ -361,6 +358,7 @@ const getGiftBoxById = async (req: Request, res: Response): Promise<void> => {
   } catch (err: any) {
     res.status(500).send(`Error fetching giftbox by ID: ${err.message || err}`);
   }
+  next();
 };
 
 export {
