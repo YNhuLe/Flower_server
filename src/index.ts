@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from "cors";
 import plantRoutes from "../routes/plants-routes.js"
@@ -8,13 +9,11 @@ import userRoutes from "../routes/user-routes.js";
 import chatRoutes from "../routes/chat-routes.js";
 import webhookRoutes from "../routes/webhook_routes.js";  
 import feedbackRoutes from "../routes/feedbackRoutes.js";
-import dotenv from "dotenv";
-dotenv.config();
-
+import searchRoutes from "../routes/search-routes.js";
+import paymentRoutes from "../routes/stripe_payment.js";
+import subscriptionRoutes from "../routes/subscribtion-route.js";
 const app = express();
 const PORT = process.env.PORT ?? 3000;
-
-
 app.use(express.static('public'));
 app.use(cors())
 app.use(express.json());
@@ -26,6 +25,9 @@ app.use("/", chatRoutes);
 app.use("/", saleDataRoutes);
 app.use("/", userRoutes);
 app.use("/", feedbackRoutes);
+app.use("/", searchRoutes);
+app.use("/", paymentRoutes);
+app.use("/", subscriptionRoutes);
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
