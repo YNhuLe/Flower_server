@@ -1,7 +1,7 @@
 import initKnex from "knex";
 import configuration from "../knexfile";
 import type { Request, Response, NextFunction } from "express";
-import { syncToMailchimp } from "../services/mailchimpSerivice";
+import { syncToMailchimp } from "../services/mailchimpService";
 const knex = initKnex(configuration);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -27,17 +27,15 @@ const subscribeToNewletter = async (
       res.status(400).json({ error: "Invalid email address" });
       return;
     }
-    const existingEmail = await knex("subscribtions")
+    const existingEmail = await knex("subscriptions")
       .select("id", "status")
       .where({ email })
       .first();
-    if (existingEmail) {
-      res
-        .status(200)
-        .json({
-          message: "Email already subscribed",
-          status: existingEmail.status,
-        });
+    if (existingEmail && existingEmail.status !== "unsubscribed") {
+      res.status(200).json({
+        message: "Email already subscribed",
+        status: existingEmail.status,
+      });
       return;
     }
 
@@ -45,18 +43,25 @@ const subscribeToNewletter = async (
     const mailchimpResponse = await syncToMailchimp(email);
 
     //insert locally, linking the Mailchimp contact id
-    const [subscriber] = await knex("subscribtions")
-      .insert({
-        email,
-        status: "pending",
-        mailchimp_id: mailchimpResponse.id,
-        created_at: knex.fn.now(),
-      })
-      .returning(["id", "email", "status", "mailchimp_id"]);
+    let subscriber;
+    if (existingEmail) {
+      [subscriber] =   await knex("subscriptions")
+        .where({ email })
+        .update({ status: "pending", mailchimp_id: mailchimpResponse.id })
+        .returning(['id', 'email', 'status', 'mailchimp_id']);
+    } else {
+  [subscriber] =   await knex('subscriptions')
+   .insert({ email, status: "pending",
+     mailchimp_id: mailchimpResponse.id,
+      created_at: knex.fn.now() })
+      .returning(['id', 'email', 'status', 'mailchimp_id']);
+
+    }
 
     //response to the frontend
     res.status(201).json({ message: "Subscription successful", subscriber });
   } catch (error: any) {
+    console.error("Error subscribing to newsletter:", error);
     res.status(500).json({
       error: "An error occurred while processing your subscription",
     });
